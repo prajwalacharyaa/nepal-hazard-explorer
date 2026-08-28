@@ -60,7 +60,8 @@ python aggregate.py          # -> events.geojson (coords+dedup), districts.geojs
                              #    calendar.json, events_by_district/, meta.json
 python outlook.py            # -> outlook.json  (seasonal climatology for the
                              #    Experimental section — descriptive, not a forecast)
-# optional experimental layers:
+# experimental layers:
+python glof.py               # -> glof.json            (curated dangerous_lakes.csv, §7)
 python susceptibility.py     # -> susceptibility.json  (needs hazard rasters, §6)
 python fetch_nowcast.py      # -> nowcast.json         (needs EARTHDATA_TOKEN, §8)
 
