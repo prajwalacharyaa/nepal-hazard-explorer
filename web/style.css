@@ -125,9 +125,64 @@ h1, h2, h3 {
     width: 348px;
     max-height: calc(100dvh - 32px);
     border-radius: var(--r-card);
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.22s;
+  }
+  #panel[data-collapsed="true"] {
+    transform: translateX(calc(-100% - 24px));
+    opacity: 0;
+    pointer-events: none;
   }
   #panel-handle { display: none; }
+  /* the area card follows the panel when it slides away */
+  body.panel-collapsed #area-card { left: 16px; }
+  body.panel-collapsed #calendar-panel { max-width: calc(100vw - 32px); }
 }
+
+/* collapse chevron, top-right of the panel header */
+.icon-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--ink); border-color: var(--hair); }
+@media (max-width: 899px) { .icon-btn { display: none; } }
+
+/* floating "Filters" pill that brings the panel back */
+#panel-restore {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 9px 14px 9px 11px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+#panel-restore:hover { background: var(--surface-2); border-color: var(--hair-strong); }
+#panel-restore svg { color: var(--accent); }
+@media (max-width: 899px) { #panel-restore { display: none; } }
 
 @media (max-width: 899px) {
   #panel {
@@ -166,9 +221,11 @@ h1, h2, h3 {
 }
 
 .panel-head {
+  position: relative;
   padding: 16px 20px 8px;
   flex: none;
 }
+@media (min-width: 900px) { #panel h1 { padding-right: 34px; } }
 @media (max-width: 899px) { .panel-head { padding: 2px 16px 8px; } }
 #panel h1 {
   font-size: 17px;
@@ -993,3 +1050,43 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   background: var(--surface); border: 1px solid var(--hair); border-radius: 4px;
   padding: 2px 6px; font-family: var(--mono); font-size: 12.5px; color: var(--ink);
 }
+
+/* ============================================================================
+   SCROLLBARS — thin, no arrows, theme-matched. Applied to every scroll surface.
+   ========================================================================== */
+.panel-body, #calendar-panel, .combo-list, .table-wrap, .doc-body, body {
+  scrollbar-width: thin;                       /* Firefox */
+  scrollbar-color: var(--hair-strong) transparent;
+}
+.panel-body::-webkit-scrollbar,
+#calendar-panel::-webkit-scrollbar,
+.combo-list::-webkit-scrollbar,
+.table-wrap::-webkit-scrollbar,
+.cite::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+.panel-body::-webkit-scrollbar-track,
+#calendar-panel::-webkit-scrollbar-track,
+.combo-list::-webkit-scrollbar-track,
+.table-wrap::-webkit-scrollbar-track,
+.cite::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb,
+#calendar-panel::-webkit-scrollbar-thumb,
+.combo-list::-webkit-scrollbar-thumb,
+.table-wrap::-webkit-scrollbar-thumb,
+.cite::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: var(--hair-strong);
+  border-radius: 999px;
+}
+.panel-body::-webkit-scrollbar-thumb:hover,
+#calendar-panel::-webkit-scrollbar-thumb:hover,
+.combo-list::-webkit-scrollbar-thumb:hover,
+.table-wrap::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover { background: var(--ink-ghost); }
+/* kill the stepper arrows and the corner box */
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+::-webkit-scrollbar-corner { background: transparent; }

@@ -36,15 +36,19 @@ window.__map = map;                       // handy when debugging in the console
    routinely while panning, so never warn on those. Only speak up if the map
    genuinely never finishes loading. */
 let mapReady = false;
-map.on("load", () => { mapReady = true; });
+const markReady = () => { mapReady = true; };
+map.on("load", markReady);
+map.on("idle", markReady);
+map.on("sourcedata", (e) => { if (e.isSourceLoaded) markReady(); });
 map.on("error", (e) => {
   console.error("[map]", (e && e.error && e.error.message) || e);
 });
 setTimeout(() => {
-  if (!mapReady) {
+  // only complain if nothing at all arrived and the style never parsed
+  if (!mapReady && !map.isStyleLoaded()) {
     toast("The basemap did not load — check the network connection. Hazard data is unaffected.", 7000);
   }
-}, 15000);
+}, 20000);
 
 let deckOverlay = null;
 
@@ -313,22 +317,44 @@ async function ensurePalikaLayer() {
 map.on("zoomend", () => { if (map.getZoom() >= 7.8) ensurePalikaLayer(); });
 
 function openPalikaCard(pcode, name, lngLat) {
-  const ix = state.data.palikaIndex && state.data.palikaIndex[pcode];
-  const feats = filteredEvents().filter((f) => f.properties.palika_pcode === pcode);
-  renderAreaCard({
-    title: ix ? ix.palika : name,
-    subtitle: `${ix ? ix.district + " district · " : ""}municipality`,
-    slug: ix ? slugify(ix.district) : slugify(name),
-    feats, allTime: ix,
-  });
+  state.openArea = { kind: "palika", pcode, name };
+  renderOpenArea();
 }
 
 /* ------------------------------------------------------------ area card --- */
 function openAreaCard(district, lngLat) {
-  const ix = state.data.index && state.data.index[district];
-  const feats = filteredEvents().filter((f) => f.properties.district === district);
-  renderAreaCard({ title: district, subtitle: "district",
-    slug: slugify(district), feats, allTime: ix });
+  state.openArea = { kind: "district", district };
+  renderOpenArea();
+}
+
+/* Rebuild whatever area card is open against the CURRENT filters. Called both
+   when an area is first clicked and on every filter change, so the card never
+   shows figures that disagree with the map. */
+function renderOpenArea() {
+  const a = state.openArea;
+  if (!a) return;
+  if (a.kind === "palika") {
+    const ix = state.data.palikaIndex && state.data.palikaIndex[a.pcode];
+    renderAreaCard({
+      title: ix ? ix.palika : a.name,
+      subtitle: `${ix ? ix.district + " district · " : ""}municipality`,
+      slug: ix ? slugify(ix.district) : slugify(a.name),
+      feats: filteredEvents().filter((f) => f.properties.palika_pcode === a.pcode),
+      allTime: ix,
+    });
+  } else {
+    const ix = state.data.index && state.data.index[a.district];
+    renderAreaCard({
+      title: a.district, subtitle: "district", slug: slugify(a.district),
+      feats: filteredEvents().filter((f) => f.properties.district === a.district),
+      allTime: ix,
+    });
+  }
+}
+
+function closeAreaCard() {
+  state.openArea = null;
+  document.getElementById("area-card").hidden = true;
 }
 
 /* stats for whatever is currently filtered, plus an all-time context line */
@@ -364,14 +390,17 @@ function renderAreaCard({ title, subtitle, slug, feats, allTime }) {
        ${!isFull && allTime ? `<p class="muted">All-time: ${fmt(allTime.events)} events, ${allTime.deaths} deaths, ${allTime.first_year}–${allTime.last_year}.</p>` : ""}`;
   }
 
+  const firstOpen = card.hidden;
   card.innerHTML = `<button class="x" aria-label="Close">×</button>
     <h3>${title}</h3>
     <p class="muted">${subtitle}</p>
     ${body}
     <a class="cta" href="district.html?d=${encodeURIComponent(slug)}${q}">Open full district page →</a>`;
   card.hidden = false;
-  if (typeof collapsePanel === "function") collapsePanel();
-  card.querySelector(".x").onclick = () => (card.hidden = true);
+  // only steal focus / collapse the sheet when the card first appears, not on
+  // every filter-driven refresh
+  if (firstOpen && typeof collapsePanel === "function") collapsePanel();
+  card.querySelector(".x").onclick = closeAreaCard;
 }
 
 /* year + hazard filter as a URL suffix, so a click-through stays consistent */
@@ -423,6 +452,7 @@ function refresh() {
   else if (state.view === "hexbin") showHexbin();
   else if (state.view === "calendar") drawCalendar();
   updateStats();
+  renderOpenArea();      // keep the open area card in step with the filters
   syncHash();
 }
 
@@ -604,6 +634,29 @@ document.getElementById("panel-handle").onclick = () => {
   panelEl.dataset.state = panelEl.dataset.state === "open" ? "peek" : "open";
 };
 map.on("dragstart", collapsePanel);
+
+/* desktop: slide the whole panel off-screen for a full-width map */
+const collapseBtn = document.getElementById("panel-collapse");
+const restoreBtn = document.getElementById("panel-restore");
+function setPanelHidden(hidden) {
+  panelEl.dataset.collapsed = String(hidden);
+  document.body.classList.toggle("panel-collapsed", hidden);
+  collapseBtn.setAttribute("aria-expanded", String(!hidden));
+  restoreBtn.hidden = !hidden;
+  // let MapLibre pick up the new viewport once the slide finishes
+  setTimeout(() => map.resize(), 320);
+  if (hidden) restoreBtn.focus();
+  else collapseBtn.focus();
+}
+collapseBtn.onclick = () => setPanelHidden(true);
+restoreBtn.onclick = () => setPanelHidden(false);
+addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && panelEl.dataset.collapsed !== "true"
+      && matchMedia("(min-width: 900px)").matches
+      && !e.target.closest("input, select, textarea")) {
+    setPanelHidden(true);
+  }
+});
 function districtAt(pt) {
   if (!state.data.districts) return null;
   const p = turf.point(pt);
@@ -642,8 +695,7 @@ document.getElementById("reset-filters").onclick = () => {
   document.getElementById("year-max").value = state.absMax;
   document.getElementById("year-label").textContent = `${state.absMin}–${state.absMax}`;
   document.querySelectorAll("#hazard-filter .pill").forEach((b) => b.setAttribute("aria-pressed", "true"));
-  document.getElementById("area-card").hidden = true;
-  refresh();
+  refresh();      // the open area card refreshes with everything else
 };
 
 /* ------------------------------------------------------------------ misc -- */
