@@ -1,5 +1,5 @@
 /* Experimental section — Approach D (seasonal statistical outlook). */
-const { DATA, loadJSON, fmt, slugify, hazardName, readableDate } = window.NHM;
+const { DATA, THEME, loadJSON, fmt, slugify, hazardName, readableDate } = window.NHM;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -148,7 +148,7 @@ function renderNowcast(d) {
   const rec = (NOW.districts || {})[d];
   const dEl = document.getElementById("nc-district");
   if (rec) {
-    const col = rec.level === "high" ? "#bd0026" : "#f28e2b";
+    const col = rec.level === "high" ? "#b91c1c" : "#b45309";
     dEl.innerHTML =
       `<b>${d}</b>: <span style="color:${col}">${rec.level.toUpperCase()}</span> ` +
       `landslide hazard nowcast for ${NOW.as_of}. ` +
@@ -164,7 +164,7 @@ function renderNowcast(d) {
     const r = NOW.districts[name];
     const s = document.createElement("span");
     s.className = "chip on";
-    s.style.color = r.level === "high" ? "#bd0026" : "#f28e2b";
+    s.style.color = r.level === "high" ? "#b91c1c" : "#b45309";
     s.textContent = `${name} · ${r.level}`;
     s.onclick = () => { document.getElementById("d-pick").value = name; render(); };
     list.appendChild(s);
@@ -173,7 +173,7 @@ function renderNowcast(d) {
     list.innerHTML = "<span class='muted'>No districts flagged in the latest nowcast.</span>";
 }
 
-const LS_COLORS = ["#20242b", "#4e79a7", "#76b7b2", "#f6c85f", "#f28e2b", "#bd0026"];
+const LS_COLORS = ["#94a3b8", "#2c6ca0", "#0f766e", "#d97706", "#ea580c", "#b91c1c"];
 
 function renderSusceptibility(d) {
   const method = document.getElementById("susc-method");
@@ -218,18 +218,18 @@ function drawMonthChart(rec, mo) {
   const y = d3.scaleLinear().domain([0, ymax]).nice().range([H - padB, padT]);
   const svg = d3.create("svg").attr("width", W).attr("height", H).attr("font-size", 9);
 
-  svg.append("g").attr("transform", `translate(0,${H - padB})`).attr("color", "#9aa3ad")
+  svg.append("g").attr("transform", `translate(0,${H - padB})`).attr("color", THEME.inkFaint)
     .call(d3.axisBottom(x).tickFormat((i) => MONTHS[i]).tickSizeOuter(0));
-  svg.append("g").attr("transform", `translate(${padL},0)`).attr("color", "#9aa3ad")
+  svg.append("g").attr("transform", `translate(${padL},0)`).attr("color", THEME.inkFaint)
     .call(d3.axisLeft(y).ticks(4).tickSizeOuter(0));
 
   svg.append("g").selectAll("rect").data(data).join("rect")
     .attr("x", (_, i) => x(i)).attr("width", x.bandwidth())
     .attr("y", (b) => y(b.mean)).attr("height", (b) => y(0) - y(b.mean))
-    .attr("fill", (_, i) => (i + 1 === mo ? "#ff7a45" : "#4e79a7"))
+    .attr("fill", (_, i) => (i + 1 === mo ? THEME.accent : THEME.bar))
     .append("title").text((b) => `${MONTHS[b.m - 1]}: mean ${b.mean}, 5–95% ${b.lo}–${b.hi}`);
 
-  svg.append("g").attr("stroke", "#e8eaed").attr("stroke-width", 1)
+  svg.append("g").attr("stroke", THEME.inkFaint).attr("stroke-width", 1).attr("opacity", 0.55)
     .selectAll("line").data(data).join("line")
     .attr("x1", (_, i) => x(i) + x.bandwidth() / 2).attr("x2", (_, i) => x(i) + x.bandwidth() / 2)
     .attr("y1", (b) => y(b.lo)).attr("y2", (b) => y(b.hi));
@@ -240,7 +240,7 @@ function drawTrend(rec) {
   const box = document.getElementById("trend-box");
   const s = rec.trend_per_year;
   const arrow = s > 0.15 ? "↑" : s < -0.15 ? "↓" : "→";
-  const col = s > 0.15 ? "#f28e2b" : s < -0.15 ? "#4e79a7" : "#9aa3ad";
+  const col = s > 0.15 ? "#b45309" : s < -0.15 ? THEME.bar : THEME.inkFaint;
   box.innerHTML =
     `<p style="font-size:26px;margin:4px 0;color:${col}">${arrow} ${s > 0 ? "+" : ""}${s.toFixed(2)}<span style="font-size:12px"> events / year</span></p>` +
     `<p class="cap">OLS slope of annual recorded totals, 2011–2025. Reporting coverage also grew over this period, so part of any rise is observational.</p>`;
@@ -257,9 +257,9 @@ function drawHist(rec) {
   svg.append("g").selectAll("rect").data(share).join("rect")
     .attr("x", (_, i) => x(i)).attr("width", x.bandwidth())
     .attr("y", (v) => y(v || 0)).attr("height", (v) => H - padB - y(v || 0))
-    .attr("fill", "#76b7b2")
+    .attr("fill", "#0f766e")
     .append("title").text((v, i) => `${MONTHS[i]}: ${Math.round((v || 0) * 100)}% of 1971–2010 events`);
-  svg.append("g").attr("transform", `translate(0,${H - padB})`).attr("color", "#9aa3ad")
+  svg.append("g").attr("transform", `translate(0,${H - padB})`).attr("color", THEME.inkFaint)
     .call(d3.axisBottom(x).tickFormat((i) => MONTHS[i][0]).tickSizeOuter(0));
   box.append(svg.node());
 }

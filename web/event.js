@@ -1,6 +1,6 @@
 /* Per-event permalink: event.html?id=<id>&d=<slug> */
-const { HAZARD_COLORS, paths, slugify, loadJSON, fmt, hazardName,
-        readableDate, download } = window.NHM;
+const { HAZARD_COLORS, THEME, MAP_STYLE, paths, slugify, loadJSON, fmt,
+        hazardName, readableDate, download, toast } = window.NHM;
 
 const qs = new URLSearchParams(location.search);
 const ID = qs.get("id");
@@ -64,7 +64,7 @@ function render(feat, siblings) {
 
   // map
   const m = new maplibregl.Map({
-    container: "e-map", style: "https://tiles.openfreemap.org/styles/positron",
+    container: "e-map", style: MAP_STYLE,
     center: [lon, lat], zoom: p.geo_precision === "exact" ? 11 : 8,
     attributionControl: { compact: true },
   });
@@ -74,7 +74,7 @@ function render(feat, siblings) {
     m.addLayer({
       id: "pt", type: "circle", source: "pt",
       paint: { "circle-radius": 8, "circle-color": HAZARD_COLORS[p.hazard] || "#888",
-        "circle-stroke-width": 2, "circle-stroke-color": "#fff" },
+        "circle-stroke-width": 2.5, "circle-stroke-color": "#ffffff" },
     });
     if (p.geo_precision !== "exact") {
       m.addLayer({ id: "halo", type: "circle", source: "pt",

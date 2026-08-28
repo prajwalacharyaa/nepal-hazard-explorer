@@ -1,6 +1,7 @@
-/* Main map: 4 views + "find your area" (near-me / dropdown / click). */
-const { HAZARD_COLORS, HAZARD_LABELS, SEV_COLORS, paths, slugify,
-        loadJSON, fmt, hazardName, readableDate, eventsToCSV, download } = window.NHM;
+/* Main map: 4 views + "find your area" (near-me / search / click). */
+const { HAZARD_COLORS, HAZARD_LABELS, SEV_COLORS, THEME, MAP_STYLE, paths,
+        slugify, loadJSON, fmt, hazardName, readableDate, eventsToCSV, download,
+        toast } = window.NHM;
 
 const state = {
   view: "heatmap",
@@ -13,7 +14,7 @@ const state = {
 
 const map = new maplibregl.Map({
   container: "map",
-  style: "https://tiles.openfreemap.org/styles/positron",
+  style: MAP_STYLE,
   center: [84.1, 28.3], zoom: 6.2,
   attributionControl: { compact: true },
 });
@@ -33,11 +34,13 @@ async function loadAll() {
   if (di.status === "fulfilled") state.data.districts = di.value;
   if (ca.status === "fulfilled") state.data.calendar = ca.value;
   if (ix.status === "fulfilled") state.data.index = ix.value;
-  loadJSON(paths.palikaIndex).then((v) => (state.data.palikaIndex = v)).catch(() => {});
+  loadJSON(paths.palikaIndex)
+    .then((v) => { state.data.palikaIndex = v; buildPlaceIndex(); })
+    .catch(() => buildPlaceIndex());
 
   if (!state.data.events) {
     document.getElementById("stats").innerHTML =
-      "<b>No data.</b> Run the pipeline (README) to build data/processed/.";
+      "<b>No data loaded.</b><span class='sub'>Run the pipeline (see README) to build data/processed/.</span>";
     return;
   }
   const yrs = state.data.events.features.map((f) => f.properties.year).filter(Boolean);
@@ -48,9 +51,10 @@ async function loadAll() {
   const initialView = applyHash();
   buildHazardChips();
   initYearSliders();
-  buildDistrictPicker();
+  buildPlaceIndex();
   document.getElementById("precise-only").checked = state.preciseOnly;
   document.getElementById("metric").value = state.metric;
+  updateStats();                       // panel is useful before the map paints
   const go = () => setView(initialView || "heatmap");
   map.loaded() ? go() : map.once("load", go);
 }
@@ -115,25 +119,23 @@ function addHeatmapLayer() {
           ["ln", ["+", 1, ["get", "severity_score"]]], 0, 0.15, 8, 1]],
       "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 5, 1, 12, 3],
       "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 5, 12, 12, 30],
-      "heatmap-opacity": 0.85,
-      "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"],
-        0, "rgba(0,0,0,0)", 0.2, "#2c7fb8", 0.4, "#7fcdbb",
-        0.6, "#fed976", 0.8, "#fd8d3c", 1, "#bd0026"],
+      "heatmap-opacity": 0.8,
+      "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], ...THEME.heat],
     },
   });
   const hazColor = ["match", ["get", "hazard"],
-    ...Object.entries(HAZARD_COLORS).flat(), "#888"];
+    ...Object.entries(HAZARD_COLORS).flat(), THEME.inkFaint];
   const isExact = ["==", ["get", "geo_precision"], "exact"];
   map.addLayer({
     id: "heat-points", type: "circle", source: "events", minzoom: 8,
     paint: {
-      "circle-radius": ["*", ["interpolate", ["linear"], ["zoom"], 8, 2, 14, 6],
-        ["case", isExact, 1, 0.8]],
-      // exact = filled; centroid = hollow ring
-      "circle-color": ["case", isExact, hazColor, "rgba(0,0,0,0)"],
-      "circle-opacity": 0.8,
-      "circle-stroke-width": ["case", isExact, 0.5, 1.2],
-      "circle-stroke-color": ["case", isExact, "#0b0d10", hazColor],
+      "circle-radius": ["*", ["interpolate", ["linear"], ["zoom"], 8, 2.4, 14, 6.5],
+        ["case", isExact, 1, 0.85]],
+      // exact = filled dot; centroid = hollow ring
+      "circle-color": ["case", isExact, hazColor, "rgba(255,255,255,0.85)"],
+      "circle-opacity": 0.9,
+      "circle-stroke-width": ["case", isExact, 1, 1.4],
+      "circle-stroke-color": ["case", isExact, "#ffffff", hazColor],
     },
   });
 }
@@ -144,9 +146,9 @@ function addChoroplethLayer() {
     map.addSource("districts", { type: "geojson", data: state.data.districts });
   if (!map.getLayer("choro")) {
     map.addLayer({ id: "choro", type: "fill", source: "districts",
-      paint: { "fill-color": "#333", "fill-opacity": 0.72 } });
+      paint: { "fill-color": THEME.surface2, "fill-opacity": 0.82 } });
     map.addLayer({ id: "choro-line", type: "line", source: "districts",
-      paint: { "line-color": "#0b0d10", "line-width": 0.6 } });
+      paint: { "line-color": "#ffffff", "line-width": 1 } });
     map.on("click", "choro", (e) => {
       if (map.getZoom() >= 8) return;   // palika layer handles clicks when zoomed in
       openAreaCard(e.features[0].properties.district, e.lngLat);
@@ -163,8 +165,9 @@ function paintChoropleth() {
     .map((f) => f.properties[m] || 0).filter((v) => v > 0).sort((a, b) => a - b);
   if (!vals.length) return;
   const q = (p) => vals[Math.floor(p * (vals.length - 1))];
-  const stops = [[0, "#20242b"], [q(0.2), "#3b5a6b"], [q(0.4), "#4e79a7"],
-    [q(0.6), "#f6c85f"], [q(0.8), "#f28e2b"], [q(0.95), "#bd0026"]];
+  const R = THEME.ramp;
+  const stops = [[0, R[0]], [q(0.2), R[1]], [q(0.4), R[2]],
+    [q(0.6), R[3]], [q(0.8), R[4]], [q(0.93), R[5]], [q(0.99), R[6]]];
   map.setPaintProperty("choro", "fill-color",
     ["interpolate", ["linear"], ["coalesce", ["get", m], 0], ...stops.flat()]);
   legendGradient(stops, m);
@@ -181,8 +184,7 @@ function showHexbin() {
     id: "hex", data: rows, getPosition: (d) => d.position,
     getElevationWeight: (d) => d.score, getColorWeight: (d) => d.score,
     elevationScale: 40, extruded: true, radius: 6000, coverage: 0.85, pickable: true,
-    colorRange: [[44, 127, 184], [127, 205, 187], [199, 233, 180],
-      [254, 217, 118], [253, 141, 60], [189, 0, 38]],
+    colorRange: THEME.hex,
   });
   if (!deckOverlay) { deckOverlay = new deck.MapboxOverlay({ layers: [layer] }); map.addControl(deckOverlay); }
   else deckOverlay.setProps({ layers: [layer] });
@@ -229,17 +231,18 @@ function drawCalendar() {
   const svg = d3.create("svg").attr("width", w).attr("height", h)
     .attr("font-size", 10).attr("role", "img")
     .attr("aria-label", `Calendar heatmap of ${metricName} by year and month, ${years[0]}–${years.at(-1)}`);
-  svg.append("g").attr("fill", "#9aa3ad").selectAll("text").data(months).join("text")
+  svg.append("g").attr("fill", THEME.inkFaint).attr("font-weight", 600)
+    .selectAll("text").data(months).join("text")
     .attr("x", (_, i) => padL + i * cw + cw / 2).attr("y", 14).attr("text-anchor", "middle").text((d) => d);
   svg.append("g").selectAll("text").data(years).join("text")
-    .attr("x", padL - 6).attr("y", (_, i) => padT + i * ch + ch / 2 + 3).attr("text-anchor", "end")
-    .attr("fill", (d) => (d < REPORTING_ERA ? "#5b6472" : "#9aa3ad")).text((d) => d);
+    .attr("x", padL - 8).attr("y", (_, i) => padT + i * ch + ch / 2 + 3).attr("text-anchor", "end")
+    .attr("fill", (d) => (d < REPORTING_ERA ? "#a8b1bd" : THEME.inkFaint)).text((d) => d);
   const yi = new Map(years.map((y, i) => [y, i]));
   svg.append("g").selectAll("rect").data(rows).join("rect")
     .attr("x", (d) => padL + (d.mo - 1) * cw).attr("y", (d) => padT + yi.get(d.y) * ch)
-    .attr("width", cw - 1.5).attr("height", ch - 1.5).attr("rx", 2)
-    .attr("opacity", (d) => (d.y < REPORTING_ERA ? 0.55 : 1))
-    .attr("fill", (d) => (d.val ? color(Math.sqrt(d.val)) : "#20242b"))
+    .attr("width", cw - 1.5).attr("height", ch - 1.5).attr("rx", 2.5)
+    .attr("opacity", (d) => (d.y < REPORTING_ERA ? 0.6 : 1))
+    .attr("fill", (d) => (d.val ? color(Math.sqrt(d.val)) : THEME.surface2))
     .append("title").text((d) =>
       `${d.y}-${String(d.mo).padStart(2, "0")}: ${useScore ? Math.round(d.val) + " severity" : d.val + " events"}`);
   el.append(svg.node());
@@ -254,11 +257,11 @@ async function ensurePalikaLayer() {
   map.addSource("palikas", { type: "geojson", data: gj });
   map.addLayer({
     id: "palika-fill", type: "fill", source: "palikas", minzoom: 8,
-    paint: { "fill-color": "#ff7a45", "fill-opacity": 0.04 },
+    paint: { "fill-color": THEME.accent, "fill-opacity": 0.03 },
   });
   map.addLayer({
     id: "palika-line", type: "line", source: "palikas", minzoom: 8,
-    paint: { "line-color": "#7a5a44", "line-width": 0.5 },
+    paint: { "line-color": THEME.accent, "line-opacity": 0.35, "line-width": 0.7 },
   });
   map.on("click", "palika-fill", (e) => {
     openPalikaCard(e.features[0].properties.adm3_pcode,
@@ -372,7 +375,7 @@ function hazardLegend() {
     Object.keys(HAZARD_COLORS).map((h) =>
       `<div class="row"><span class="sw" style="background:${HAZARD_COLORS[h]}"></span>${HAZARD_LABELS[h]}</div>`
     ).join("") +
-    '<div class="row" style="margin-top:6px"><span class="sw" style="border:1.5px solid #888;background:transparent"></span>approx. location (centroid)</div>';
+    `<div class="row" style="margin-top:8px"><span class="sw" style="border:1.5px solid ${THEME.inkGhost || "#94a3b8"};background:#fff"></span>approximate location (centroid)</div>`;
 }
 function refresh() {
   if (state.view === "heatmap") ensureEventSource();
@@ -415,15 +418,96 @@ function initYearSliders() {
   mn.oninput = sync; mx.oninput = sync;
   document.getElementById("year-label").textContent = `${state.yearMin}–${state.yearMax}`;
 }
-function buildDistrictPicker() {
-  const sel = document.getElementById("district-pick");
-  const names = state.data.index ? Object.keys(state.data.index).sort()
-    : [...new Set(state.data.districts.features.map((f) => f.properties.district))].sort();
-  for (const n of names) {
-    const o = document.createElement("option"); o.value = n; o.textContent = n; sel.appendChild(o);
+/* ---- place search: districts + municipalities, fuzzy-ish prefix match ---- */
+let PLACES = [];
+function buildPlaceIndex() {
+  const seen = new Set();
+  const out = [];
+  const dNames = state.data.index ? Object.keys(state.data.index)
+    : (state.data.districts?.features || []).map((f) => f.properties.district);
+  for (const n of dNames) {
+    if (!n || seen.has("d:" + n)) continue;
+    seen.add("d:" + n);
+    out.push({ name: n, kind: "District", district: n, events: state.data.index?.[n]?.events || 0 });
   }
-  sel.onchange = () => { if (sel.value) location.href = `district.html?d=${encodeURIComponent(slugify(sel.value))}`; };
+  for (const p of Object.values(state.data.palikaIndex || {})) {
+    if (!p.palika || seen.has("p:" + p.palika + p.district)) continue;
+    seen.add("p:" + p.palika + p.district);
+    out.push({ name: p.palika, kind: p.district, district: p.district, events: p.events || 0 });
+  }
+  PLACES = out;
 }
+
+function searchPlaces(q) {
+  const s = q.trim().toLowerCase();
+  if (s.length < 2) return [];
+  const scored = [];
+  for (const p of PLACES) {
+    const n = p.name.toLowerCase();
+    let score;
+    if (n === s) score = 0;
+    else if (n.startsWith(s)) score = 1;
+    else if (n.includes(s)) score = 2;
+    else continue;
+    // districts first at equal score, then more-affected places
+    scored.push([score, p.kind === "District" ? 0 : 1, -p.events, p]);
+  }
+  scored.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+  return scored.slice(0, 12).map((x) => x[3]);
+}
+
+function initPlaceSearch() {
+  const input = document.getElementById("place-search");
+  const list = document.getElementById("place-results");
+  if (!input) return;
+  let results = [], active = -1;
+
+  const close = () => {
+    list.hidden = true; list.innerHTML = ""; active = -1;
+    input.setAttribute("aria-expanded", "false");
+  };
+  const go = (p) => {
+    close();
+    location.href = `district.html?d=${encodeURIComponent(slugify(p.district))}${filterQuery()}`;
+  };
+  const paint = () => {
+    list.innerHTML = results.length
+      ? results.map((p, i) =>
+          `<button type="button" role="option" aria-selected="${i === active}" data-i="${i}">
+             <span>${p.name}</span><span class="kind">${p.kind}</span>
+           </button>`).join("")
+      : '<div class="none">No matching district or municipality.</div>';
+    list.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    list.querySelectorAll("button").forEach((b) => {
+      b.onclick = () => go(results[+b.dataset.i]);
+    });
+  };
+
+  input.oninput = () => {
+    results = searchPlaces(input.value);
+    active = -1;
+    if (!input.value.trim()) return close();
+    paint();
+  };
+  input.onkeydown = (e) => {
+    if (e.key === "Escape") return close();
+    if (!results.length) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      active = (active + (e.key === "ArrowDown" ? 1 : -1) + results.length) % results.length;
+      paint();
+      list.children[active]?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      go(results[active >= 0 ? active : 0]);
+    }
+  };
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".combo")) close();
+  });
+}
+initPlaceSearch();
 function initTimeline() {
   const s = document.getElementById("time-slider");
   s.min = state.yearMin; s.max = state.yearMax; s.value = state.hexYear ?? state.yearMax;
@@ -452,20 +536,21 @@ document.getElementById("precise-only").onchange = (e) => { state.preciseOnly = 
 
 document.getElementById("near-me").onclick = () => {
   const btn = document.getElementById("near-me");
-  const reset = () => (btn.textContent = "Use my location");
+  const label = btn.innerHTML;
+  const restore = () => (btn.innerHTML = label);
   btn.textContent = "Locating…";
-  if (!navigator.geolocation) { reset(); alert("Geolocation not available."); return; }
+  if (!navigator.geolocation) { restore(); toast("Geolocation isn't available in this browser."); return; }
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      reset();
+      restore();
       const pt = [pos.coords.longitude, pos.coords.latitude];
       map.flyTo({ center: pt, zoom: 9 });
       collapsePanel();
       const d = districtAt(pt);
       if (d) openAreaCard(d, { lng: pt[0], lat: pt[1] });
-      else alert("Your location isn't inside a Nepal district in this dataset.");
+      else toast("Your location isn't inside a Nepal district in this dataset.");
     },
-    () => { reset(); alert("Could not get your location."); },
+    () => { restore(); toast("Could not get your location — check browser permissions."); },
     { enableHighAccuracy: true, timeout: 10000 },
   );
 };
@@ -490,18 +575,35 @@ function districtAt(pt) {
 
 document.getElementById("copy-link").onclick = async () => {
   syncHash();
-  const btn = document.getElementById("copy-link");
-  try { await navigator.clipboard.writeText(location.href); btn.textContent = "✓ Link copied"; }
-  catch (e) { btn.textContent = location.href; }
-  setTimeout(() => (btn.textContent = "🔗 Copy link to this view"), 2500);
+  try {
+    await navigator.clipboard.writeText(location.href);
+    toast("Link copied — it reopens this exact view.");
+  } catch (e) {
+    toast("Copy failed. The address bar already holds this view's link.");
+  }
 };
 
 document.getElementById("download-view").onclick = () => {
   const f = filteredEvents();
+  if (!f.length) return toast("Nothing to download — no events match the current filters.");
   const tag = `nepal-hazards_${state.yearMin}-${state.yearMax}`;
   download(`${tag}.csv`, eventsToCSV(f), "text/csv");
   download(`${tag}.geojson`,
     JSON.stringify({ type: "FeatureCollection", features: f }), "application/geo+json");
+  toast(`Downloading ${fmt(f.length)} events as CSV and GeoJSON.`);
+};
+
+document.getElementById("reset-filters").onclick = () => {
+  state.hazards = new Set(Object.keys(HAZARD_COLORS));
+  state.yearMin = state.absMin; state.yearMax = state.absMax;
+  state.preciseOnly = false;
+  document.getElementById("precise-only").checked = false;
+  document.getElementById("year-min").value = state.absMin;
+  document.getElementById("year-max").value = state.absMax;
+  document.getElementById("year-label").textContent = `${state.absMin}–${state.absMax}`;
+  document.querySelectorAll("#hazard-filter .pill").forEach((b) => b.setAttribute("aria-pressed", "true"));
+  document.getElementById("area-card").hidden = true;
+  refresh();
 };
 
 /* ------------------------------------------------------------------ misc -- */
@@ -519,19 +621,32 @@ function updateStats() {
   const exact = f.reduce((s, x) => s + (x.properties.geo_precision === "exact" ? 1 : 0), 0);
   const pct = f.length ? Math.round((exact / f.length) * 100) : 0;
   document.getElementById("stats").innerHTML =
-    `<b>${fmt(f.length)}</b> events · <b>${fmt(deaths)}</b> deaths` +
-    (missing ? ` · <b>${fmt(missing)}</b> missing` : "") +
-    `<br><span class="muted">${state.yearMin}–${state.yearMax} · ${pct}% precisely located</span>`;
+    `<div class="stat-row"><span class="big-num">${fmt(f.length)}</span> events` +
+    `<span>· <b>${fmt(deaths)}</b> deaths</span>` +
+    (missing ? `<span>· <b>${fmt(missing)}</b> missing</span>` : "") +
+    `</div><span class="sub">${state.yearMin}–${state.yearMax} · ${pct}% precisely located</span>`;
+
+  // surface the reset affordance only when something is actually filtered
+  const filtered = state.hazards.size !== Object.keys(HAZARD_COLORS).length ||
+    state.yearMin !== state.absMin || state.yearMax !== state.absMax || state.preciseOnly;
+  const btn = document.getElementById("reset-filters");
+  if (btn) btn.hidden = !filtered;
 }
 
 loadAll();
 window.NHM.stampMeta("#meta-stamp");
 map.on("click", "heat-points", (e) => {
   const p = e.features[0].properties;
-  new maplibregl.Popup().setLngLat(e.lngLat).setHTML(
-    `<b>${hazardName(p.hazard)}</b> · ${readableDate(p.date, p.date_precision)}<br>` +
-    `${p.title || ""}<br>deaths ${p.deaths ?? "?"} · ${p.severity_class}<br>` +
-    `<a href="event.html?id=${encodeURIComponent(p.id)}&d=${slugify(p.district || "")}">full record →</a>`,
+  const loss = [
+    p.deaths ? `${fmt(p.deaths)} dead` : null,
+    p.missing ? `${fmt(p.missing)} missing` : null,
+  ].filter(Boolean).join(" · ") || "no casualties recorded";
+  new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(e.lngLat).setHTML(
+    `<b style="color:${HAZARD_COLORS[p.hazard] || THEME.ink}">${hazardName(p.hazard)}</b>` +
+    `<span style="color:${THEME.inkFaint}"> · ${readableDate(p.date, p.date_precision)}</span><br>` +
+    `${p.title ? `<span style="color:${THEME.inkDim}">${p.title}</span><br>` : ""}` +
+    `<span style="color:${THEME.inkDim}">${loss}</span><br>` +
+    `<a href="event.html?id=${encodeURIComponent(p.id)}&d=${slugify(p.district || "")}">Full record →</a>`,
   ).addTo(map);
 });
 map.on("mouseenter", "heat-points", () => (map.getCanvas().style.cursor = "pointer"));

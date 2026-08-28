@@ -1,6 +1,7 @@
 /* Per-district page: district.html?d=<slug> */
-const { HAZARD_COLORS, HAZARD_LABELS, paths, slugify, loadJSON, fmt,
-        hazardName, readableDate, eventsToCSV, download } = window.NHM;
+const { HAZARD_COLORS, HAZARD_LABELS, THEME, MAP_STYLE, paths, slugify,
+        loadJSON, fmt, hazardName, readableDate, eventsToCSV, download,
+        toast } = window.NHM;
 
 const qp = new URLSearchParams(location.search);
 const slug = qp.get("d") || "";
@@ -118,7 +119,7 @@ function renderAnswers() {
 /* -------- mini locator map -------- */
 async function renderMiniMap() {
   const m = new maplibregl.Map({
-    container: "d-map", style: "https://tiles.openfreemap.org/styles/positron",
+    container: "d-map", style: MAP_STYLE,
     center: meanCenter(), zoom: 8, attributionControl: { compact: true },
   });
   m.addControl(new maplibregl.NavigationControl({ showCompass: false }));
@@ -130,7 +131,7 @@ async function renderMiniMap() {
       paint: {
         "circle-radius": ["interpolate", ["linear"], ["get", "severity_score"], 0, 3, 200, 11],
         "circle-color": ["match", ["get", "hazard"], ...Object.entries(HAZARD_COLORS).flat(), "#888"],
-        "circle-opacity": 0.7, "circle-stroke-width": 0.5, "circle-stroke-color": "#0b0d10",
+        "circle-opacity": 0.85, "circle-stroke-width": 1, "circle-stroke-color": "#ffffff",
       },
     });
     try {
@@ -139,7 +140,7 @@ async function renderMiniMap() {
       if (poly) {
         m.addSource("poly", { type: "geojson", data: poly });
         m.addLayer({ id: "poly", type: "line", source: "poly",
-          paint: { "line-color": "#ff7a45", "line-width": 1.5 } }, "pts");
+          paint: { "line-color": THEME.accent, "line-width": 1.6 } }, "pts");
         m.fitBounds(turfBounds(poly), { padding: 30, duration: 0 });
       }
     } catch (e) {}
@@ -188,18 +189,18 @@ function renderCharts() {
       .attr("x", x(years[0])).attr("y", 4)
       .attr("width", Math.max(0, (x(ERA - 1) ?? x(years.at(-1))) + x.bandwidth() - x(years[0])))
       .attr("height", h - pad - 4)
-      .attr("fill", "#ffffff").attr("opacity", 0.04);
+      .attr("fill", THEME.ink).attr("opacity", 0.045);
     svg.append("text").attr("x", x(years[0]) + 3).attr("y", 12)
-      .attr("fill", "#6f7883").attr("font-size", 8).text("sparser reporting");
+      .attr("fill", THEME.inkFaint).attr("font-size", 8.5).attr("font-weight", 600).text("sparser reporting");
   }
   svg.append("g").selectAll("rect.bar").data(years).join("rect").attr("class", "bar")
     .attr("x", (d) => x(d)).attr("y", (d) => y(byYear.get(d) || 0))
     .attr("width", x.bandwidth()).attr("height", (d) => h - pad - y(byYear.get(d) || 0))
-    .attr("fill", (d) => (d < ERA ? "#3a5f7d" : "#4e79a7"))
+    .attr("fill", (d) => (d < ERA ? THEME.barMuted : THEME.bar))
     .append("title").text((d) => `${d}: ${byYear.get(d) || 0}`);
-  svg.append("g").attr("transform", `translate(0,${h - pad})`).attr("color", "#9aa3ad")
+  svg.append("g").attr("transform", `translate(0,${h - pad})`).attr("color", THEME.inkFaint)
     .call(d3.axisBottom(x).tickValues(years.filter((d) => d % 10 === 0)).tickSizeOuter(0));
-  svg.append("g").attr("transform", `translate(${pad},0)`).attr("color", "#9aa3ad")
+  svg.append("g").attr("transform", `translate(${pad},0)`).attr("color", THEME.inkFaint)
     .call(d3.axisLeft(y).ticks(3).tickSizeOuter(0));
   box.append(svg.node());
 
@@ -234,9 +235,9 @@ function renderTable() {
     tr.innerHTML =
       `<td><a href="event.html?id=${encodeURIComponent(p.id)}&d=${slug}">${readableDate(p.date, p.date_precision)}</a></td>
        <td style="color:${HAZARD_COLORS[p.hazard] || "#888"}">${hazardName(p.hazard)}</td>
-       <td>${p.deaths ?? ""}</td><td>${p.missing ?? ""}</td>
-       <td>${p.houses_destroyed ?? ""}</td>
-       <td>${p.severity_score ? Math.round(p.severity_score) : ""}</td>
+       <td class="num">${p.deaths ?? ""}</td><td class="num">${p.missing ?? ""}</td>
+       <td class="num">${p.houses_destroyed ?? ""}</td>
+       <td class="num">${p.severity_score ? Math.round(p.severity_score) : ""}</td>
        <td class="muted">${p.place_detail || p.title || ""}${p.source ? ` · <span class="pill">${p.source}</span>` : ""}</td>`;
     tb.appendChild(tr);
   }
@@ -279,8 +280,8 @@ function renderPalikas() {
       const w = p.worst;
       const tr = document.createElement("tr");
       tr.innerHTML =
-        `<td>${p.palika}</td><td>${fmt(p.events)}</td><td>${fmt(p.deaths)}</td>
-         <td>${p.last_year || ""}</td>
+        `<td>${p.palika}</td><td class="num">${fmt(p.events)}</td><td class="num">${fmt(p.deaths)}</td>
+         <td class="num">${p.last_year || ""}</td>
          <td class="muted">${w ? `${hazardName(w.hazard)} ${readableDate(w.date)}` +
            (w.deaths ? `, ${w.deaths} dead` : "") +
            ` <a href="event.html?id=${encodeURIComponent(w.id)}&d=${slug}">›</a>` : ""}</td>`;

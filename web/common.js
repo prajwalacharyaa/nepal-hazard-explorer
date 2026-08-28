@@ -3,17 +3,47 @@
 (function () {
   const DATA = "../data/processed";
 
+  /* Hazard palette — tuned for a LIGHT background: each colour clears 4.5:1
+     against white so it works as body text as well as a map fill. */
   const HAZARD_COLORS = {
-    landslide: "#e15759", flood: "#4e79a7", flash_flood: "#76b7b2",
-    glof: "#b07aa1", debris_flow: "#f28e2b", avalanche: "#bab0ac", other: "#8c8c8c",
+    landslide: "#c0392b", flood: "#2c6ca0", flash_flood: "#0f766e",
+    glof: "#8a4f7d", debris_flow: "#b45309", avalanche: "#64748b", other: "#52525b",
   };
   const HAZARD_LABELS = {
     landslide: "Landslide", flood: "Flood", flash_flood: "Flash flood",
     glof: "GLOF", debris_flow: "Debris flow", avalanche: "Avalanche", other: "Other",
   };
   const SEV_COLORS = {
-    minor: "#5b6472", small: "#4e79a7", moderate: "#f6c85f",
-    major: "#f28e2b", catastrophic: "#bd0026",
+    minor: "#94a3b8", small: "#2c6ca0", moderate: "#d97706",
+    major: "#ea580c", catastrophic: "#b91c1c",
+  };
+
+  /* Chart / map colours, so no module hardcodes a theme value. */
+  const THEME = {
+    ink: "#0f172a",
+    inkDim: "#475569",
+    inkFaint: "#64748b",
+    hair: "#e2e8f0",
+    surface: "#ffffff",
+    surface2: "#f1f5f9",
+    accent: "#c2410c",
+    bar: "#2c6ca0",
+    barMuted: "#a8c3da",
+    // sequential ramp for choropleth / calendar on a light ground (YlOrRd)
+    ramp: ["#fff7ec", "#fee8c8", "#fdd49e", "#fdbb84", "#fc8d59", "#e34a33", "#b30000"],
+    // heat layer on a light basemap: transparent -> warm
+    heat: [
+      0, "rgba(255,247,236,0)",
+      0.15, "rgba(254,232,200,0.6)",
+      0.35, "#fdd49e",
+      0.55, "#fdbb84",
+      0.72, "#fc8d59",
+      0.87, "#e34a33",
+      1, "#b30000",
+    ],
+    // deck.gl hexbin (RGB triples)
+    hex: [[254, 232, 200], [253, 212, 158], [253, 187, 132],
+          [252, 141, 89], [227, 74, 51], [179, 0, 0]],
   };
 
   const paths = {
@@ -97,8 +127,27 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
+  /* Basemap style — light, matches the UI. */
+  const MAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
+
+  /* Toast: brief, non-blocking confirmation (replaces alert()). */
+  function toast(msg, ms = 3200) {
+    let t = document.getElementById("nhm-toast");
+    if (!t) {
+      t = document.createElement("div");
+      t.id = "nhm-toast";
+      t.setAttribute("role", "status");
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove("show"), ms);
+  }
+
   window.NHM = {
-    DATA, HAZARD_COLORS, HAZARD_LABELS, SEV_COLORS, paths, slugify,
-    loadJSON, fmt, hazardName, readableDate, eventsToCSV, download, stampMeta,
+    DATA, HAZARD_COLORS, HAZARD_LABELS, SEV_COLORS, THEME, MAP_STYLE, paths,
+    slugify, loadJSON, fmt, hazardName, readableDate, eventsToCSV, download,
+    stampMeta, toast,
   };
 })();
