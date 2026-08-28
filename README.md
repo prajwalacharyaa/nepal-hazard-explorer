@@ -43,11 +43,15 @@ pip install -r requirements.txt
 python make_demo.py          # -> data/processed/events.geojson (SYNTHETIC)
 
 # real build:
-python fetch_bipad.py        # -> data/raw/bipad_incidents.jsonl  (resumable)
-python fetch_nasa_glc.py     # -> data/raw/nasa_glc_nepal.geojson
-# (place the 3 manual downloads in data/raw/ — see DATA_SOURCES.md)
-python clean_merge.py        # -> data/processed/events.geojson
-python aggregate.py          # -> data/processed/districts.geojson, calendar.json
+python fetch_bipad.py        # Nepal DRR/BIPAD API  -> bipad_incidents.jsonl (resumable)
+python fetch_desinventar.py  # DesInventar Sentinel  -> desinventar_npl.xml + shapefiles
+python fetch_nasa_glc.py     # NASA GLC (optional; exits clean if endpoint down)
+python clean_merge.py        # -> events.geojson (normalise, scope-filter, light dedup)
+python aggregate.py          # -> events.geojson (coords+dedup), districts.geojson,
+                             #    district_index.json, calendar.json
+
+# current output: ~13,000 events, 1971-2026, from BIPAD + DesInventar.
+# NASA GLC and HDX boundaries/population are optional add-ons (see DATA_SOURCES.md).
 ```
 
 Then serve **from the repo root** (so `web/` can reach `data/`):

@@ -191,79 +191,90 @@ def load_nasa() -> list[dict]:
 
 
 # ---------------------------------------------------------- DesInventar -----
-DESINV_TYPE_FIELD = "event"          # DesInventar "evento"
-DESINV_MAP_HINT = "see DATA_SOURCES.md"
+# DesInventar Sentinel export: <DESINVENTAR><fichas><TR>...</TR></fichas>.
+# One <TR> per recorded disaster. Spanish-derived tag names. 182 MB for Nepal,
+# so we stream it with iterparse. Geo is code-based (latitude/longitude are 0);
+# real coordinates get filled from the bundled village/district shapefiles in
+# aggregate.py.
+
+def _desinv_date(y, m, d):
+    if not y or int(y) == 0:
+        return None, None, None, None
+    y = int(y)
+    m = int(m or 0)
+    d = int(d or 0)
+    if not (1 <= m <= 12):
+        return f"{y:04d}-01-01", "year", y, None
+    if not (0 <= d <= 31):
+        d = 0
+    if d == 0:
+        return f"{y:04d}-{m:02d}-01", "month", y, m
+    try:
+        datetime(y, m, d)                       # validate real calendar date
+        return f"{y:04d}-{m:02d}-{d:02d}", "day", y, m
+    except ValueError:
+        return f"{y:04d}-{m:02d}-01", "month", y, m
 
 
 def load_desinventar() -> list[dict]:
     xml = RAW / "desinventar_npl.xml"
-    xlsx = RAW / "desinventar_npl.xlsx"
-    rows = []
-    if xml.exists():
-        recs = _desinv_from_xml(xml)
-    elif xlsx.exists():
-        recs = pd.read_excel(xlsx).to_dict("records")
-    else:
-        print("  (skip) no DesInventar file")
+    if not xml.exists():
+        print("  (skip) no desinventar_npl.xml — run fetch_desinventar.py")
         return []
 
-    for r in recs:
-        iso, prec, yr, mo = parse_date(r.get("date"))
-        if iso is None:
+    rows = []
+    context = ET.iterparse(str(xml), events=("end",))
+    for _, el in context:
+        if el.tag != "TR":
             continue
+        if el.find("evento") is None or el.find("fechano") is None:
+            el.clear()
+            continue
+
+        def g(tag):
+            t = el.findtext(tag)
+            return t.strip() if t else None
+
+        raw_evt = g("evento")
+        hazard = norm_hazard(raw_evt)
+        iso, prec, yr, mo = _desinv_date(g("fechano"), g("fechames"), g("fechadia"))
+        if iso is None:
+            el.clear()
+            continue
+
+        lvl2 = g("level2")
+        district = (g("name1") or "").title() or None
+        village = g("name2") or None
+
         row = blank_row()
         row.update(
-            id=f"desinventar-{r.get('serial')}",
+            id=f"desinventar-{g('serial')}",
             source="desinventar",
             date=iso, date_precision=prec, year=yr, month=mo,
-            hazard=norm_hazard(r.get("event")), hazard_raw=r.get("event"),
-            district=(r.get("level1") or None),
-            geo_precision="district_centroid",   # lon/lat filled later in aggregate step
-            deaths=to_int(r.get("deaths")),
-            missing=to_int(r.get("missing")),
-            injured=to_int(r.get("injured")),
-            people_affected=to_int(r.get("affected")),
-            houses_destroyed=to_int(r.get("houses_destroyed")),
-            houses_damaged=to_int(r.get("houses_damaged")),
-            title=r.get("event"),
-            source_url="https://www.desinventar.net/",
+            hazard=hazard, hazard_raw=raw_evt,
+            district=district,
+            geo_precision="village_centroid" if lvl2 else "district_centroid",
+            deaths=to_int(g("muertos")),
+            missing=to_int(g("desaparece")),
+            injured=to_int(g("heridos")),
+            people_affected=to_int(g("afectados")) or to_int(g("damnificados")),
+            houses_destroyed=to_int(g("vivdest")),
+            houses_damaged=to_int(g("vivafec")),
+            title=f"{raw_evt.title()} - {village or district or 'Nepal'}",
+            source_url=f"https://www.desinventar.net/DesInventar/profiletab.jsp?countrycode=npl&serial={g('serial')}",
         )
+        # geo codes for centroid resolution downstream (stripped after aggregate)
+        row["_lvl1"] = g("level1")
+        row["_lvl2"] = lvl2
+        # research-useful extras, kept in the output
+        row["place_detail"] = g("lugar")
+        row["report_sources"] = g("fuentes")
+        row["glide"] = g("glide")
         rows.append(row)
-    print(f"  desinventar: {len(rows)} rows")
+        el.clear()
+
+    print(f"  desinventar: {len(rows)} rows streamed")
     return rows
-
-
-def _desinv_from_xml(path):
-    """DesInventar export: <DISASTER> rows under <fichas>/<TDF>... schema varies.
-    We read the common <ficha> elements. Adjust tags if your export differs."""
-    tree = ET.parse(path)
-    root = tree.getroot()
-    out = []
-    for f in root.iter("ficha"):
-        def g(tag):
-            el = f.find(tag)
-            return el.text if el is not None else None
-        y, m, d = g("fechano"), g("fechames"), g("fechadia")
-        date = None
-        if y:
-            date = f"{int(y):04d}"
-            if m and int(m) > 0:
-                date += f"-{int(m):02d}"
-                if d and int(d) > 0:
-                    date += f"-{int(d):02d}"
-        out.append(dict(
-            serial=g("serial"),
-            date=date,
-            event=g("evento"),
-            level1=g("level1") or g("lugar"),
-            deaths=g("muertos"),
-            missing=g("desaparece"),
-            injured=g("heridos"),
-            affected=g("afectados") or g("damnificados"),
-            houses_destroyed=g("vivdest"),
-            houses_damaged=g("vivafec"),
-        ))
-    return out
 
 
 # ---------------------------------------------------------------- dedupe ----
@@ -283,36 +294,31 @@ def richness(row) -> int:
     )
 
 
-def dedupe(rows: list[dict]) -> list[dict]:
-    rows = sorted(rows, key=lambda r: (r["date"], r["hazard"]))
+def _merge_into(k, r):
+    if richness(r) > richness(k):
+        k.update({kk: r[kk] for kk in SEVERITY_WEIGHTS})
+    k["source"] = "+".join(sorted(set(str(k["source"]).split("+")) | {r["source"]}))
+
+
+def dedupe_exact(rows: list[dict]) -> list[dict]:
+    """Conservative: only collapse near-certain double entries — same hazard,
+    same exact date, same village/district, and identical headline losses.
+    Cross-source spatial dedup happens later (aggregate.py) once every row
+    has a real coordinate."""
     kept: list[dict] = []
+    seen: dict[tuple, dict] = {}
     for r in rows:
-        merged = False
-        for k in reversed(kept[-200:]):  # only look back a window
-            if k["hazard"] != r["hazard"]:
-                continue
-            dd = abs(
-                (datetime.fromisoformat(k["date"]) - datetime.fromisoformat(r["date"])).days
-            )
-            if dd > 2:
-                continue
-            same_place = (
-                k["district"] and r["district"] and k["district"] == r["district"]
-            )
-            near = (
-                k["lon"] is not None and r["lon"] is not None
-                and haversine_km((k["lon"], k["lat"]), (r["lon"], r["lat"])) <= 5
-            )
-            if same_place or near:
-                if richness(r) > richness(k):
-                    k.update({kk: r[kk] for kk in SEVERITY_WEIGHTS})
-                srcs = set(str(k["source"]).split("+")) | {r["source"]}
-                k["source"] = "+".join(sorted(srcs))
-                merged = True
-                break
-        if not merged:
-            kept.append(r)
-    print(f"  dedupe: {len(rows)} -> {len(kept)}")
+        key = (
+            r["hazard"], r["date"],
+            r.get("_lvl2") or r.get("district") or "",
+            r.get("deaths") or 0, r.get("houses_destroyed") or 0,
+        )
+        if key in seen and (r.get("_lvl2") or r.get("district")):
+            _merge_into(seen[key], r)
+            continue
+        seen[key] = r
+        kept.append(r)
+    print(f"  dedupe_exact: {len(rows)} -> {len(kept)}")
     return kept
 
 
@@ -337,7 +343,7 @@ def main():
     rows = [r for r in rows if r["hazard"] in KEEP_HAZARDS]
     print(f"  scope filter: {before} -> {len(rows)} (kept {sorted(KEEP_HAZARDS)})")
 
-    rows = dedupe(rows)
+    rows = dedupe_exact(rows)
     for r in rows:
         r["severity_score"] = score(r)
         r["severity_class"] = severity_class(r["severity_score"])

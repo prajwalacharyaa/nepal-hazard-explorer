@@ -1,17 +1,43 @@
+ACCIDENT
 Animal Incidents
+BIOLOGICAL
+BOAT CAPSIZE
 Boat Capsize
 Bridge Collapse
+COLD WAVE
 Cold Wave
+DROUGHT
 Drowning
+EARTHQUAKE
+EPIDEMIC
+EXPLOSION
 Earthquake
 Epidemic
+FAMINE
+FIRE
+FOREST FIRE
+FROST
 Fire
 Forest Fire
+HAIL STORM
+HEAT WAVE
 Heavy Rainfall
 High Altitude
+LEAK
+OTHER
 Others (Non-Natural)
+PANIC
+PLAGUE
+POLLUTION
+RAINS
+SEDIMENTATION
+SNOW STORM
+STORM
+STRONG WIND
+STRUCT.COLLAPSE
 Snake Bite
 Snow Storm
 Storm
+THUNDERSTORM
 Thunderbolt
 Wind Storm

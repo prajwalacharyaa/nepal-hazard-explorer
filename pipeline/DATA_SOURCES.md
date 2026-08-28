@@ -19,17 +19,18 @@
   (small…catastrophic), `fatality_count`, `injury_count`, `source_name`.
 - `clean_merge.py` reads `nasa_glc_nepal.geojson` **or** `nasa_glc_nepal.csv`.
 
-## Manual (3 files, one-time)
+### 3. DesInventar Sentinel — Nepal  — `fetch_desinventar.py`  *(now automated)*
+- Pulls the static country zip
+  <https://www.desinventar.net/DesInventar/download/DI_export_npl.zip>
+  (~13 MB) — no manual export, no key.
+- Extracts `desinventar_npl.xml` (182 MB, every recorded disaster 1971–2013,
+  district + village level: deaths, missing, injured, affected, houses
+  destroyed/damaged, GLIDE, report sources) plus the bundled
+  `village.shp` / `district.shp` used to turn DesInventar level codes into
+  real coordinates.
+- Streamed with `iterparse` in `clean_merge.py` (file is too big for `ET.parse`).
 
-### 3. DesInventar Sentinel — Nepal
-- Go to <https://www.desinventar.net/DesInventar/download_base.jsp>
-- Country: **Nepal** (database code `npl`). Download the **XML** package
-  (`DI_export_npl.xml`) — contains every recorded disaster since 1971 with
-  district (`level1`), event type, deaths, missing, houses destroyed/damaged,
-  affected.
-- Save as `data/raw/desinventar_npl.xml`.
-- Alternative: the online query tool → export to Excel; save as
-  `data/raw/desinventar_npl.xlsx`.
+## Manual (optional — improve resolution, not required to build)
 
 ### 4. Nepal administrative boundaries (COD-AB)
 - HDX: <https://data.humdata.org/dataset/cod-ab-npl>
