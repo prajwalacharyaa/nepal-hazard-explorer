@@ -32,17 +32,19 @@ map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom
 map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: false }), "bottom-right");
 window.__map = map;                       // handy when debugging in the console
 
-// A blank basemap should say why rather than look like a broken page.
-let tileErrorShown = false;
+/* A blank basemap should say why — but individual tile requests fail or abort
+   routinely while panning, so never warn on those. Only speak up if the map
+   genuinely never finishes loading. */
+let mapReady = false;
+map.on("load", () => { mapReady = true; });
 map.on("error", (e) => {
-  const msg = (e && e.error && e.error.message) || "unknown map error";
-  console.error("[map]", msg, e);
-  if (tileErrorShown) return;
-  if (/style|sprite|glyph|tiles?\.openfreemap|Failed to fetch|NetworkError/i.test(msg)) {
-    tileErrorShown = true;
-    toast("Basemap tiles could not load — check the network connection. Hazard data is unaffected.", 6000);
-  }
+  console.error("[map]", (e && e.error && e.error.message) || e);
 });
+setTimeout(() => {
+  if (!mapReady) {
+    toast("The basemap did not load — check the network connection. Hazard data is unaffected.", 7000);
+  }
+}, 15000);
 
 let deckOverlay = null;
 
@@ -152,9 +154,12 @@ function addHeatmapLayer() {
         ["case", ["==", ["get", "geo_precision"], "exact"], 1.0, 0.5],
         ["interpolate", ["linear"],
           ["ln", ["+", 1, ["get", "severity_score"]]], 0, 0.15, 8, 1]],
-      "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 5, 1, 12, 3],
-      "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 5, 12, 12, 30],
-      "heatmap-opacity": 0.8,
+      // ~13k points over a small country saturate very easily — keep intensity
+      // low and the radius tight so this reads as density, not a red mask.
+      "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 4, 0.35, 7, 0.55, 10, 0.9, 14, 1.4],
+      "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 4, 6, 7, 11, 10, 18, 14, 30],
+      // fade out as the individual points take over
+      "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.85, 11, 0.55, 14, 0.3],
       "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], ...THEME.heat],
     },
   });

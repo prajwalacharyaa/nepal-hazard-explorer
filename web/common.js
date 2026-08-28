@@ -31,15 +31,16 @@
     barMuted: "#a8c3da",
     // sequential ramp for choropleth / calendar on a light ground (YlOrRd)
     ramp: ["#fff7ec", "#fee8c8", "#fdd49e", "#fdbb84", "#fc8d59", "#e34a33", "#b30000"],
-    // heat layer on a light basemap: transparent -> warm
+    // heat layer on a light basemap. Deliberately translucent at the low end so
+    // place names stay readable; only genuine clusters reach the deep reds.
     heat: [
-      0, "rgba(255,247,236,0)",
-      0.15, "rgba(254,232,200,0.6)",
-      0.35, "#fdd49e",
-      0.55, "#fdbb84",
-      0.72, "#fc8d59",
-      0.87, "#e34a33",
-      1, "#b30000",
+      0.00, "rgba(255,247,236,0)",
+      0.12, "rgba(254,224,182,0.28)",
+      0.28, "rgba(253,204,138,0.52)",
+      0.48, "rgba(252,166,105,0.68)",
+      0.68, "rgba(246,120,72,0.80)",
+      0.86, "rgba(214,64,40,0.88)",
+      1.00, "rgba(160,10,10,0.94)",
     ],
     // deck.gl hexbin (RGB triples)
     hex: [[254, 232, 200], [253, 212, 158], [253, 187, 132],
