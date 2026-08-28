@@ -6,7 +6,7 @@ const state = {
   view: "heatmap",
   hazards: new Set(Object.keys(HAZARD_COLORS)),
   yearMin: 1971, yearMax: new Date().getFullYear(),
-  metric: "events",
+  metric: "events", preciseOnly: false,
   data: { events: null, districts: null, calendar: null, index: null, palikaIndex: null },
   anim: null, hexYear: null, palikaLoaded: false,
 };
@@ -56,7 +56,8 @@ function filteredEvents() {
     const p = f.properties;
     return f.geometry &&
       state.hazards.has(p.hazard || "other") &&
-      p.year >= state.yearMin && p.year <= state.yearMax;
+      p.year >= state.yearMin && p.year <= state.yearMax &&
+      (!state.preciseOnly || p.geo_precision === "exact");
   });
 }
 
@@ -73,8 +74,11 @@ function addHeatmapLayer() {
   map.addLayer({
     id: "heat", type: "heatmap", source: "events",
     paint: {
-      "heatmap-weight": ["interpolate", ["linear"],
-        ["ln", ["+", 1, ["get", "severity_score"]]], 0, 0.15, 8, 1],
+      // severity-weighted, and down-weighted where the point is a centroid
+      "heatmap-weight": ["*",
+        ["case", ["==", ["get", "geo_precision"], "exact"], 1.0, 0.5],
+        ["interpolate", ["linear"],
+          ["ln", ["+", 1, ["get", "severity_score"]]], 0, 0.15, 8, 1]],
       "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 5, 1, 12, 3],
       "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 5, 12, 12, 30],
       "heatmap-opacity": 0.85,
@@ -83,13 +87,19 @@ function addHeatmapLayer() {
         0.6, "#fed976", 0.8, "#fd8d3c", 1, "#bd0026"],
     },
   });
+  const hazColor = ["match", ["get", "hazard"],
+    ...Object.entries(HAZARD_COLORS).flat(), "#888"];
+  const isExact = ["==", ["get", "geo_precision"], "exact"];
   map.addLayer({
     id: "heat-points", type: "circle", source: "events", minzoom: 8,
     paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 2, 14, 6],
-      "circle-color": ["match", ["get", "hazard"],
-        ...Object.entries(HAZARD_COLORS).flat(), "#888"],
-      "circle-opacity": 0.75, "circle-stroke-width": 0.5, "circle-stroke-color": "#0b0d10",
+      "circle-radius": ["*", ["interpolate", ["linear"], ["zoom"], 8, 2, 14, 6],
+        ["case", isExact, 1, 0.8]],
+      // exact = filled; centroid = hollow ring
+      "circle-color": ["case", isExact, hazColor, "rgba(0,0,0,0)"],
+      "circle-opacity": 0.8,
+      "circle-stroke-width": ["case", isExact, 0.5, 1.2],
+      "circle-stroke-color": ["case", isExact, "#0b0d10", hazColor],
     },
   });
 }
@@ -342,6 +352,7 @@ function stopAnim() {
 
 document.querySelectorAll("#view-tabs button").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
 document.getElementById("metric").onchange = (e) => { state.metric = e.target.value; paintChoropleth(); };
+document.getElementById("precise-only").onchange = (e) => { state.preciseOnly = e.target.checked; refresh(); };
 
 document.getElementById("near-me").onclick = () => {
   const btn = document.getElementById("near-me");
@@ -388,10 +399,12 @@ function updateStats() {
   const f = filteredEvents();
   const deaths = f.reduce((s, x) => s + (x.properties.deaths || 0), 0);
   const missing = f.reduce((s, x) => s + (x.properties.missing || 0), 0);
+  const exact = f.reduce((s, x) => s + (x.properties.geo_precision === "exact" ? 1 : 0), 0);
+  const pct = f.length ? Math.round((exact / f.length) * 100) : 0;
   document.getElementById("stats").innerHTML =
     `<b>${fmt(f.length)}</b> events · <b>${fmt(deaths)}</b> deaths` +
     (missing ? ` · <b>${fmt(missing)}</b> missing` : "") +
-    `<br><span class="muted">${state.yearMin}–${state.yearMax}</span>`;
+    `<br><span class="muted">${state.yearMin}–${state.yearMax} · ${pct}% precisely located</span>`;
 }
 
 loadAll();
