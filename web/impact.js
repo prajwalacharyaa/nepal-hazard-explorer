@@ -8,7 +8,7 @@ const qs = new URLSearchParams(location.search);
 const ID = qs.get("id");
 const DSLUG = qs.get("d") || "";
 
-let map, EVENT = null, CORRIDOR = null, anim = null, dashStep = 0;
+let map, EVENT = null, CORRIDOR = null, anim = null;
 
 init();
 
@@ -182,12 +182,21 @@ function buildMap() {
           // dashed when modelled, solid when observed
           ...(CORRIDOR.documented_reach ? {} : { "line-dasharray": [2, 1.4] }),
         } });
-      // travelling pulse used by the animation
-      map.addLayer({ id: "corridor-pulse", type: "line", source: "corridor",
-        layout: { "line-cap": "round", visibility: "none" },
-        paint: { "line-color": "#ffffff", "line-opacity": 0.9,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 7, 3, 12, 7],
-          "line-dasharray": [0, 4, 3] } });
+      // --- flow animation: a trail that draws in behind a travelling head ---
+      map.addSource("trail", { type: "geojson", data: emptyLine() });
+      map.addLayer({ id: "corridor-trail", type: "line", source: "trail",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#0f172a", "line-opacity": 0.9,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 7, 4, 12, 8] } });
+
+      map.addSource("head", { type: "geojson", data: emptyPoint() });
+      map.addLayer({ id: "head-pulse", type: "circle", source: "head",
+        layout: { visibility: "none" },
+        paint: { "circle-radius": 18, "circle-color": col, "circle-opacity": 0.22 } });
+      map.addLayer({ id: "head-dot", type: "circle", source: "head",
+        layout: { visibility: "none" },
+        paint: { "circle-radius": 7, "circle-color": "#0f172a",
+          "circle-stroke-width": 3, "circle-stroke-color": "#ffffff" } });
 
       // direction arrows along the path
       map.addLayer({ id: "corridor-dir", type: "symbol", source: "corridor",
@@ -237,26 +246,95 @@ function fitCorridor() {
   map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: pad, duration: 700, maxZoom: 12 });
 }
 
-/* ---- flow animation: march the dash pattern downstream ---- */
-const DASH_SEQ = [
-  [0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1],
-  [2.5, 4, 0.5], [3, 4, 0], [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5],
-  [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5],
-];
+/* ============================================================================
+   FLOW ANIMATION
+   A marker travels from the source to the end of the reach while the trail
+   draws in behind it. (An earlier version animated a white dash pattern, which
+   was invisible against a light basemap.)
+   ========================================================================== */
+const emptyLine = () => ({ type: "Feature", geometry: { type: "LineString", coordinates: [] } });
+const emptyPoint = () => ({ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] } });
+
+/* cumulative planar distance along the path — good enough for interpolation */
+function cumulative(path) {
+  const cum = [0];
+  for (let i = 1; i < path.length; i++) {
+    const dx = (path[i][0] - path[i - 1][0]) * Math.cos(path[i][1] * Math.PI / 180);
+    const dy = path[i][1] - path[i - 1][1];
+    cum.push(cum[i - 1] + Math.hypot(dx, dy));
+  }
+  return cum;
+}
+
+/* position and partial path at travel fraction t (0..1) */
+function atFraction(path, cum, t) {
+  const target = cum[cum.length - 1] * t;
+  let i = 1;
+  while (i < cum.length - 1 && cum[i] < target) i++;
+  const span = cum[i] - cum[i - 1] || 1;
+  const f = Math.min(1, Math.max(0, (target - cum[i - 1]) / span));
+  const pt = [
+    path[i - 1][0] + (path[i][0] - path[i - 1][0]) * f,
+    path[i - 1][1] + (path[i][1] - path[i - 1][1]) * f,
+  ];
+  return { pt, trail: path.slice(0, i).concat([pt]) };
+}
+
 function stopFlow() {
-  if (anim) { clearInterval(anim); anim = null; }
-  if (map.getLayer("corridor-pulse")) map.setLayoutProperty("corridor-pulse", "visibility", "none");
+  if (anim) { cancelAnimationFrame(anim); anim = null; }
   document.getElementById("i-play").textContent = "▶ Play flow";
 }
+
+function resetFlow() {
+  stopFlow();
+  if (map.getSource("trail")) map.getSource("trail").setData(emptyLine());
+  if (map.getSource("head")) map.getSource("head").setData(emptyPoint());
+  if (map.getLayer("head-dot")) {
+    map.setLayoutProperty("head-dot", "visibility", "none");
+    map.setLayoutProperty("head-pulse", "visibility", "none");
+  }
+}
+
 document.getElementById("i-play").onclick = () => {
   if (anim) return stopFlow();
-  if (!map.getLayer("corridor-pulse")) return;
-  map.setLayoutProperty("corridor-pulse", "visibility", "visible");
+  if (!CORRIDOR || !map.getSource("trail")) {
+    return toast("The corridor is still loading — try again in a moment.");
+  }
+  const path = CORRIDOR.path;
+  if (path.length < 2) return;
+
+  const cum = cumulative(path);
+  // longer reaches take longer to traverse, within sensible bounds
+  const dur = Math.min(14000, Math.max(4000, CORRIDOR.length_km * 90));
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  map.setLayoutProperty("head-dot", "visibility", "visible");
+  map.setLayoutProperty("head-pulse", "visibility", "visible");
   document.getElementById("i-play").textContent = "⏸ Pause";
-  const ms = matchMedia("(prefers-reduced-motion: reduce)").matches ? 260 : 90;
-  anim = setInterval(() => {
-    dashStep = (dashStep + 1) % DASH_SEQ.length;
-    map.setPaintProperty("corridor-pulse", "line-dasharray", DASH_SEQ[dashStep]);
-  }, ms);
+
+  const t0 = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / dur);
+    const { pt, trail } = atFraction(path, cum, t);
+    map.getSource("trail").setData(
+      { type: "Feature", geometry: { type: "LineString", coordinates: trail } });
+    map.getSource("head").setData(
+      { type: "Feature", geometry: { type: "Point", coordinates: pt } });
+    // gentle pulse on the head so it reads as moving water, not a static pin
+    if (!reduce && map.getLayer("head-pulse")) {
+      map.setPaintProperty("head-pulse", "circle-radius",
+        16 + 6 * Math.sin(now / 160));
+    }
+    if (t < 1) {
+      anim = requestAnimationFrame(step);
+    } else {
+      anim = null;
+      document.getElementById("i-play").textContent = "↻ Replay flow";
+    }
+  };
+  // a fresh run always starts from the source
+  map.getSource("trail").setData(emptyLine());
+  anim = requestAnimationFrame(step);
 };
+
 document.getElementById("i-fit").onclick = fitCorridor;
