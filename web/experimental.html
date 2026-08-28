@@ -24,7 +24,7 @@
   <main class="doc-body">
     <nav class="sub-tabs">
       <a href="#outlook" class="active">D · Seasonal outlook</a>
-      <a href="#susceptibility" class="muted">A · Susceptibility (planned)</a>
+      <a href="#susceptibility" class="">A · Susceptibility</a>
       <a href="#nowcast" class="muted">C · Daily nowcast (planned)</a>
       <a href="#glof" class="muted">B · GLOF scenarios (planned)</a>
     </nav>
@@ -63,10 +63,26 @@
       </div>
     </section>
 
-    <section id="susceptibility" class="planned">
-      <h2>A · Landslide &amp; flood susceptibility <span class="chip">planned</span></h2>
-      <p class="muted">Static proneness from NASA Global Landslide Susceptibility and
-        JRC Global Flood Hazard, sampled per ward/district. Not yet built.</p>
+    <section id="susceptibility">
+      <h2>A · Landslide &amp; flood susceptibility</h2>
+      <p class="cap" id="susc-method"></p>
+      <p class="muted" id="susc-missing" hidden>
+        Hazard rasters not loaded. Run <code>pipeline/susceptibility.py</code> after
+        placing the grids in <code>data/raw/</code> — see DATA_SOURCES.md §6.
+      </p>
+      <div class="split" id="susc-body" hidden>
+        <div>
+          <h3>Landslide susceptibility <span class="src-tag" id="ls-src"></span></h3>
+          <div id="ls-box"></div>
+        </div>
+        <div>
+          <h3>100-year flood exposure <span class="src-tag" id="fl-src"></span></h3>
+          <div id="fl-box"></div>
+        </div>
+      </div>
+      <p class="cap">Global models. Landslide grid ~1&nbsp;km, flood grid ~90&nbsp;m.
+        District aggregates — a "high" district still contains safe ground and vice
+        versa. Use as regional context, not a site assessment.</p>
     </section>
     <section id="nowcast" class="planned">
       <h2>C · Daily landslide nowcast <span class="chip">planned</span></h2>

@@ -52,3 +52,37 @@
 - Free account: <https://public.emdat.be/>
 - Query country = Nepal, disaster types = Flood, Landslide, Mass movement.
 - Export CSV → `data/raw/emdat_npl.csv`.
+
+## 6. Hazard-model rasters — Approach A  (`susceptibility.py`)
+
+Both are large global grids. Download once, clip to Nepal, drop in `data/raw/`.
+`susceptibility.py` then produces the small `susceptibility.json`.
+
+### 6a. NASA Global Landslide Susceptibility (Stanley & Kirschbaum 2017)
+- Resource Watch: <https://resourcewatch.org/data/explore/dis007-Landslide-Susceptibility>
+  → Download → GeoTIFF. (Background: <https://gpm.nasa.gov/landslides/projects.html>)
+- Classes 1–5 (very low … very high), ~1 km.
+- Clip and save:
+  ```
+  gdalwarp -te 80 26 89 31 -t_srs EPSG:4326 \
+      landslide_susceptibility_global.tif data/raw/landslide_susceptibility.tif
+  ```
+
+### 6b. 100-year river-flood hazard
+Pick one:
+- **JRC Global Flood Hazard, RP100**:
+  <https://data.jrc.ec.europa.eu/dataset/jrc-floods-floodmapgl_rp100y-tif>
+  Download the 10°×10° tiles covering Nepal (lon 80–89 E, lat 26–31 N), mosaic them:
+  ```
+  gdalbuildvrt fl.vrt ID*_N*_E8*.tif
+  gdalwarp -te 80 26 89 31 fl.vrt data/raw/flood_hazard.tif
+  ```
+- **WRI Aqueduct Floods (riverine, 1/100, baseline)** — single global file, lighter:
+  `http://wri-projects.s3.amazonaws.com/AqueductFloodTool/download/v2/inunriver_historical_000000000WATCH_1980_rp00100.tif`
+  ```
+  gdalwarp -te 80 26 89 31 inunriver_historical_..._rp00100.tif data/raw/flood_hazard.tif
+  ```
+- Pixel value must be water depth in metres (both of the above are).
+
+`gdalwarp` / `gdalbuildvrt` come with the `rasterio` install (GDAL) or conda's
+`gdal` package.

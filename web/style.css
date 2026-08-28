@@ -170,3 +170,6 @@ section.planned .chip {
   border-radius: 999px; padding: 1px 7px; color: var(--muted); vertical-align: middle;
 }
 #trend-box p { margin: 4px 0; }
+.src-tag { font-size: 10px; color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0; }
+.meter { height: 10px; background: #20242b; border-radius: 5px; overflow: hidden; margin: 6px 0; }
+.meter span { display: block; height: 100%; }

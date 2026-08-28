@@ -3,7 +3,7 @@ const { DATA, loadJSON, fmt } = window.NHM;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-let OUT = null;
+let OUT = null, SUSC = null;
 
 init();
 
@@ -14,6 +14,7 @@ async function init() {
       "outlook.json not found — run pipeline/outlook.py.";
     return;
   }
+  try { SUSC = await loadJSON(`${DATA}/susceptibility.json`); } catch (e) { SUSC = null; }
   document.getElementById("method").textContent = OUT.meta.method +
     `  Recent window ${OUT.meta.recent_window[0]}–${OUT.meta.recent_window[1]}.`;
 
@@ -69,6 +70,43 @@ function render() {
   drawMonthChart(rec, mo);
   drawTrend(rec);
   drawHist(rec);
+  renderSusceptibility(d);
+}
+
+const LS_COLORS = ["#20242b", "#4e79a7", "#76b7b2", "#f6c85f", "#f28e2b", "#bd0026"];
+
+function renderSusceptibility(d) {
+  const method = document.getElementById("susc-method");
+  const missing = document.getElementById("susc-missing");
+  const body = document.getElementById("susc-body");
+  if (!SUSC) { missing.hidden = false; body.hidden = true; method.textContent = ""; return; }
+  missing.hidden = true; body.hidden = false;
+  const m = SUSC.meta || {};
+  method.textContent = m.note || "";
+  document.getElementById("ls-src").textContent = m.landslide_source || "";
+  document.getElementById("fl-src").textContent = m.flood_source || "";
+
+  const rec = SUSC.districts[d] || {};
+  const ls = document.getElementById("ls-box");
+  if (rec.ls_majority_class) {
+    const c = rec.ls_majority_class;
+    ls.innerHTML =
+      `<p class="big" style="color:${LS_COLORS[c]}">${rec.ls_majority_label}</p>
+       <p class="muted">most common class across the district (mean ${rec.ls_mean_class}/5)</p>
+       <div class="meter"><span style="width:${rec.ls_high_pct}%;background:${LS_COLORS[4]}"></span></div>
+       <p class="muted">${rec.ls_high_pct}% of the district is class 4–5 (high / very high)</p>`;
+  } else {
+    ls.innerHTML = "<p class='muted'>No landslide raster loaded.</p>";
+  }
+  const fl = document.getElementById("fl-box");
+  if (rec.fl_area_pct != null) {
+    fl.innerHTML =
+      `<p class="big" style="color:${window.NHM.HAZARD_COLORS.flood}">${rec.fl_area_pct}%</p>
+       <p class="muted">of district area within the 100-year river floodplain</p>
+       <p class="muted">mean depth there: ${rec.fl_mean_depth_m} m · max ${rec.fl_max_depth_m} m</p>`;
+  } else {
+    fl.innerHTML = "<p class='muted'>No flood raster loaded.</p>";
+  }
 }
 
 function drawMonthChart(rec, mo) {
