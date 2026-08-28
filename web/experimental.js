@@ -1,9 +1,9 @@
 /* Experimental section — Approach D (seasonal statistical outlook). */
-const { DATA, loadJSON, fmt } = window.NHM;
+const { DATA, loadJSON, fmt, slugify, hazardName, readableDate } = window.NHM;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-let OUT = null, SUSC = null, NOW = null;
+let OUT = null, SUSC = null, NOW = null, GLOF = null;
 
 init();
 
@@ -19,6 +19,7 @@ async function init() {
     const n = await loadJSON(`${DATA}/nowcast.json`);
     NOW = n && !n.unavailable ? n : null;
   } catch (e) { NOW = null; }
+  try { GLOF = await loadJSON(`${DATA}/glof.json`); } catch (e) { GLOF = null; }
   document.getElementById("method").textContent = OUT.meta.method +
     `  Recent window ${OUT.meta.recent_window[0]}–${OUT.meta.recent_window[1]}.`;
 
@@ -45,6 +46,7 @@ async function init() {
     "This is not a forecast and must not be used for operational decisions.";
 
   window.NHM.stampMeta("#meta-stamp");
+  try { initGlof(); } catch (e) { console.error("GLOF section failed", e); }
 
   document.querySelectorAll(".sub-tabs a").forEach((a) => {
     a.onclick = () => { document.querySelectorAll(".sub-tabs a").forEach((x) => x.classList.remove("active")); a.classList.add("active"); };
@@ -78,6 +80,59 @@ function render() {
   drawHist(rec);
   renderSusceptibility(d);
   renderNowcast(d);
+}
+
+function initGlof() {
+  const missing = document.getElementById("glof-missing");
+  const body = document.getElementById("glof-body");
+  if (!GLOF || !GLOF.lakes || !GLOF.lakes.length) {
+    missing.hidden = false; body.hidden = true; return;
+  }
+  missing.hidden = true; body.hidden = false;
+  document.getElementById("glof-method").textContent = GLOF.meta.note;
+  const sel = document.getElementById("lake-pick");
+  sel.innerHTML = "";
+  GLOF.lakes.forEach((L, i) => {
+    const o = document.createElement("option");
+    o.value = i; o.textContent = `${L.lake} (${L.district})`;
+    sel.appendChild(o);
+  });
+  sel.onchange = () => renderLake(+sel.value);
+  renderLake(0);
+}
+
+function renderLake(i) {
+  const L = GLOF.lakes[i];
+  const rows = [
+    ["Lake", L.lake],
+    ["District", L.district],
+    ["Basin", L.basin || "—"],
+    ["Downstream river", L.downstream_river || "—"],
+    ["Area", L.area_km2 != null ? `${L.area_km2} km²` : "—"],
+    ["Trend", L.trend || "—"],
+    ["Past GLOF", L.past_glof && L.past_glof !== "none recorded" ? L.past_glof : "none recorded"],
+    ["Coordinates", `${L.lat.toFixed(3)}, ${L.lon.toFixed(3)} (approx)`],
+  ];
+  document.getElementById("lake-facts").innerHTML =
+    rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("") +
+    `<dt>Notes</dt><dd>${L.notes || "—"}</dd>` +
+    `<dt>References</dt><dd class="muted">${L.references || "—"}</dd>` +
+    `<dt>Downstream districts</dt><dd>${
+      L.downstream_districts.map((d) =>
+        `<a href="district.html?d=${window.NHM.slugify(d)}">${d}</a>`).join(" · ")}</dd>`;
+
+  document.getElementById("corridor-summary").textContent =
+    `${L.corridor_events_total.toLocaleString()} water-driven events on record in these districts. Most severe:`;
+  const tb = document.querySelector("#corridor-table tbody");
+  tb.innerHTML = "";
+  for (const e of L.corridor_events_top) {
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      `<td><a href="event.html?id=${encodeURIComponent(e.id)}&d=${window.NHM.slugify(e.district)}">${readableDate(e.date)}</a></td>
+       <td>${window.NHM.hazardName(e.hazard)}</td><td>${e.district}</td>
+       <td>${e.deaths || ""}</td><td>${e.severity_score ? Math.round(e.severity_score) : ""}</td>`;
+    tb.appendChild(tr);
+  }
 }
 
 function renderNowcast(d) {

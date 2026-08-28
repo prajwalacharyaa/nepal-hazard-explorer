@@ -26,7 +26,7 @@
       <a href="#outlook" class="active">D · Seasonal outlook</a>
       <a href="#susceptibility" class="">A · Susceptibility</a>
       <a href="#nowcast" class="">C · Daily nowcast</a>
-      <a href="#glof" class="muted">B · GLOF scenarios (planned)</a>
+      <a href="#glof" class="">B · GLOF scenarios</a>
     </nav>
 
     <section id="outlook">
@@ -99,10 +99,30 @@
         <div id="nc-list" class="chips"></div>
       </div>
     </section>
-    <section id="glof" class="planned">
-      <h2>B · GLOF what-if scenarios <span class="chip">planned</span></h2>
-      <p class="muted">Dangerous glacial lakes plus modelled downstream inundation
-        path. Not yet built.</p>
+    <section id="glof">
+      <h2>B · GLOF what-if — dangerous glacial lakes</h2>
+      <p class="cap" id="glof-method"></p>
+      <p class="muted" id="glof-missing" hidden>
+        No <code>glof.json</code> — run <code>pipeline/glof.py</code>.
+      </p>
+      <div id="glof-body" hidden>
+        <div class="group-inline">
+          <label>Glacial lake
+            <select id="lake-pick"></select>
+          </label>
+        </div>
+        <dl id="lake-facts" class="facts"></dl>
+        <h3>Downstream corridor — recorded water-driven events</h3>
+        <p class="cap" id="corridor-summary"></p>
+        <div class="table-wrap"><table id="corridor-table">
+          <thead><tr><th>Date</th><th>Hazard</th><th>District</th><th>Deaths</th><th>Severity</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p class="cap">This is <b>not a modelled flood path</b>. It lists disasters
+          already recorded in the districts the named downstream river passes
+          through — a rough sense of what a large outburst could interact with.
+          Full DEM-based inundation routing is future work.</p>
+      </div>
     </section>
 
     <p class="src" id="meta-stamp"></p>
