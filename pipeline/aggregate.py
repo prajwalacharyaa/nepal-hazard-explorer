@@ -31,9 +31,34 @@ from config import RAW, PROCESSED, HAZARDS
 
 SHAPES = RAW / "desinventar_shapes"
 HDX_ADM2 = RAW / "npl_adm2_districts.geojson"
+HDX_ADM3 = RAW / "npl_adm3_palikas.geojson"
 POP_CSV = RAW / "npl_pop_adm2.csv"
 
-HDX_NAME_FIELDS = ["DIST_EN", "ADM2_EN", "DISTRICT", "district"]
+HDX_NAME_FIELDS = ["adm2_name", "DIST_EN", "ADM2_EN", "DISTRICT", "district"]
+
+
+def assign_zone(features, zone_gdf, name_col, extra_cols=()):
+    """Map every event id -> {name_col: ..., **extras} by point-in-polygon, with
+    a nearest-polygon fallback for points that land just outside (boundary
+    datasets don't line up perfectly, and many old points are centroids)."""
+    pts = gpd.GeoDataFrame(
+        {"evid": [f["properties"]["id"] for f in features]},
+        geometry=[shape(f["geometry"]) for f in features], crs=4326)
+    cols = [name_col, *extra_cols]
+    z = zone_gdf[[*cols, "geometry"]].copy()
+    j = gpd.sjoin(pts, z, how="left", predicate="within")
+    j = j[~j.index.duplicated(keep="first")]
+    miss = j[j[name_col].isna()]
+    if len(miss):
+        m = 32645  # UTM 45N — metric, for a correct nearest-polygon match
+        near = gpd.sjoin_nearest(pts.loc[miss.index].to_crs(m), z.to_crs(m), how="left")
+        near = near[~near.index.duplicated(keep="first")]
+        for c in cols:
+            j.loc[miss.index, c] = near[c].values
+    out = {}
+    for r in j.itertuples():
+        out[r.evid] = {c: getattr(r, c) for c in cols}
+    return out
 
 
 # ---------------------------------------------------------------- geometry ----
@@ -192,95 +217,128 @@ def _i(x):
         return 0
 
 
-def build_districts(features, gdf, pop):
-    joined = gpd.sjoin(
-        gpd.GeoDataFrame(
-            [f["properties"] for f in features],
-            geometry=[shape(f["geometry"]) for f in features], crs=4326),
-        gdf, how="left", predicate="within",
-    )
-    # points that missed a polygon: keep their own district string
-    joined["district"] = joined["district_right"].fillna(joined.get("district_left"))
+def _blank_agg():
+    return dict(events=0, deaths=0, missing=0, injured=0, people_affected=0,
+               houses_destroyed=0, severity_score=0.0,
+               by_hazard={h: 0 for h in HAZARDS},
+               by_decade=defaultdict(int), first_year=9999, last_year=0, worst=None)
 
-    # stamp the resolved district back onto every feature (BIPAD rows had none)
-    resolved = {}
-    for r in joined.itertuples():
-        if getattr(r, "id", None) and r.id not in resolved:
-            d = r.district
-            resolved[r.id] = None if (not d or (isinstance(d, float) and math.isnan(d))) else d
+
+def _add_event(a, p):
+    a["events"] += 1
+    for k in ("deaths", "missing", "injured", "people_affected", "houses_destroyed"):
+        a[k] += _i(p.get(k))
+    sc = float(p.get("severity_score") or 0)
+    a["severity_score"] += sc
+    hz = p.get("hazard") or "other"
+    a["by_hazard"][hz] = a["by_hazard"].get(hz, 0) + 1
+    yr = _i(p.get("year"))
+    if yr:
+        a["by_decade"][yr // 10 * 10] += 1
+        a["first_year"] = min(a["first_year"], yr)
+        a["last_year"] = max(a["last_year"], yr)
+    if a["worst"] is None or sc > a["worst"]["severity_score"]:
+        a["worst"] = dict(id=p.get("id"), date=p.get("date"), hazard=hz,
+                          deaths=_i(p.get("deaths")), severity_score=round(sc, 1),
+                          title=p.get("title"))
+
+
+def _index_row(name, a, key, pop=None, extra=None):
+    row = {key: name, "events": a["events"], "deaths": a["deaths"],
+           "missing": a["missing"], "injured": a["injured"],
+           "people_affected": a["people_affected"],
+           "houses_destroyed": a["houses_destroyed"],
+           "first_year": a["first_year"], "last_year": a["last_year"],
+           "by_hazard": a["by_hazard"],
+           "by_decade": dict(sorted(a["by_decade"].items())),
+           "worst": a["worst"]}
+    if pop:
+        row["population"] = pop
+        row["deaths_per_100k"] = round(a["deaths"] / pop * 1e5, 2)
+    if extra:
+        row.update(extra)
+    return row
+
+
+def build_districts(features, gdf, pop):
+    dmap = assign_zone(features, gdf, "district")
     for f in features:
-        f["properties"]["district"] = resolved.get(f["properties"]["id"],
-                                                   f["properties"].get("district"))
+        r = dmap.get(f["properties"]["id"])
+        if r and r["district"] and not (isinstance(r["district"], float) and math.isnan(r["district"])):
+            f["properties"]["district"] = r["district"]
 
     agg = {}
-    for r in joined.itertuples():
-        d = r.district
-        if not d or (isinstance(d, float) and math.isnan(d)):
+    for f in features:
+        d = f["properties"].get("district")
+        if not d:
             continue
-        a = agg.setdefault(d, dict(
-            events=0, deaths=0, missing=0, injured=0, people_affected=0,
-            houses_destroyed=0, severity_score=0.0,
-            by_hazard={h: 0 for h in HAZARDS},
-            by_decade=defaultdict(int), first_year=9999, last_year=0,
-            worst=None))
-        a["events"] += 1
-        for k in ("deaths", "missing", "injured", "people_affected", "houses_destroyed"):
-            a[k] += _i(getattr(r, k, 0))
-        _sc = getattr(r, "severity_score", 0)
-        sc = float(_sc) if isinstance(_sc, (int, float)) and not (
-            isinstance(_sc, float) and math.isnan(_sc)) else 0.0
-        a["severity_score"] += sc
-        hz = getattr(r, "hazard", "other") or "other"
-        a["by_hazard"][hz] = a["by_hazard"].get(hz, 0) + 1
-        yr = _i(getattr(r, "year", 0))
-        if yr:
-            a["by_decade"][yr // 10 * 10] += 1
-            a["first_year"] = min(a["first_year"], yr)
-            a["last_year"] = max(a["last_year"], yr)
-        if a["worst"] is None or sc > a["worst"]["severity_score"]:
-            a["worst"] = dict(
-                id=getattr(r, "id", None), date=getattr(r, "date", None),
-                hazard=hz, deaths=_i(getattr(r, "deaths", 0)),
-                severity_score=round(sc, 1),
-                title=getattr(r, "title", None))
+        _add_event(agg.setdefault(d, _blank_agg()), f["properties"])
 
     feats, index = [], {}
     for row in gdf.itertuples():
         d = row.district
         a = agg.get(d)
-        props = dict(district=d, population=pop.get(d))
+        props = {"district": d, "population": pop.get(d)}
         if a:
-            props.update(
-                events=a["events"], deaths=a["deaths"], missing=a["missing"],
-                injured=a["injured"], houses_destroyed=a["houses_destroyed"],
-                severity_score=round(a["severity_score"], 1),
-                by_hazard=a["by_hazard"],
-                first_year=a["first_year"], last_year=a["last_year"])
+            props.update(events=a["events"], deaths=a["deaths"], missing=a["missing"],
+                         injured=a["injured"], houses_destroyed=a["houses_destroyed"],
+                         severity_score=round(a["severity_score"], 1),
+                         by_hazard=a["by_hazard"],
+                         first_year=a["first_year"], last_year=a["last_year"])
             if pop.get(d):
                 props["deaths_per_100k"] = round(a["deaths"] / pop[d] * 1e5, 2)
-            index[d] = dict(
-                district=d, population=pop.get(d),
-                events=a["events"], deaths=a["deaths"], missing=a["missing"],
-                injured=a["injured"], people_affected=a["people_affected"],
-                houses_destroyed=a["houses_destroyed"],
-                first_year=a["first_year"], last_year=a["last_year"],
-                by_hazard=a["by_hazard"], by_decade=dict(sorted(a["by_decade"].items())),
-                worst=a["worst"],
-                deaths_per_100k=props.get("deaths_per_100k"))
+            index[d] = _index_row(d, a, "district", pop.get(d))
         else:
-            props.update(events=0, deaths=0, missing=0, injured=0,
-                         houses_destroyed=0, severity_score=0.0,
-                         by_hazard={h: 0 for h in HAZARDS},
+            props.update(events=0, deaths=0, missing=0, injured=0, houses_destroyed=0,
+                         severity_score=0.0, by_hazard={h: 0 for h in HAZARDS},
                          first_year=None, last_year=None)
-        feats.append({"type": "Feature",
-                      "geometry": row.geometry.__geo_interface__,
+        feats.append({"type": "Feature", "geometry": row.geometry.__geo_interface__,
                       "properties": props})
 
     (PROCESSED / "districts.geojson").write_text(
         json.dumps({"type": "FeatureCollection", "features": feats}), encoding="utf-8")
     (PROCESSED / "district_index.json").write_text(
         json.dumps(index, ensure_ascii=False), encoding="utf-8")
-    print(f"  wrote districts.geojson ({len(feats)}) + district_index.json ({len(index)})")
+    print(f"  districts.geojson ({len(feats)}) + district_index.json ({len(index)})")
+
+
+def build_palikas(features):
+    """Municipality / rural-municipality (adm3) rollup — the drill-down floor.
+    HDX COD-AB has no ward (adm4) polygons, so this is as local as clean
+    geometry allows."""
+    if not HDX_ADM3.exists():
+        print("  (skip) no npl_adm3_palikas.geojson — palika level disabled")
+        return
+    g = gpd.read_file(HDX_ADM3).to_crs(4326).rename(
+        columns={"adm3_name": "palika", "adm2_name": "adm2", "adm3_pcode": "pcode"})
+    g["palika"] = g["palika"].astype(str).str.strip().str.title()
+    g["adm2"] = g["adm2"].astype(str).str.strip().str.title()
+
+    pmap = assign_zone(features, g, "pcode", ["palika", "adm2"])
+    for f in features:
+        r = pmap.get(f["properties"]["id"])
+        if r and isinstance(r.get("pcode"), str):
+            f["properties"]["palika"] = r["palika"]
+            f["properties"]["palika_pcode"] = r["pcode"]
+
+    agg = {}
+    for f in features:
+        pc = f["properties"].get("palika_pcode")
+        if pc:
+            _add_event(agg.setdefault(pc, _blank_agg()), f["properties"])
+
+    index = {}
+    for row in g.itertuples():
+        a = agg.get(row.pcode)
+        if not a:
+            continue
+        index[row.pcode] = _index_row(
+            row.palika, a, "palika",
+            extra={"pcode": row.pcode, "district": row.adm2,
+                   "area_sqkm": round(float(getattr(row, "area_sqkm", 0) or 0), 1)})
+    (PROCESSED / "palika_index.json").write_text(
+        json.dumps(index, ensure_ascii=False), encoding="utf-8")
+    print(f"  palika_index.json ({len(index)} of {len(g)} municipalities have events)")
 
 
 # ---------------------------------------------------------------- calendar ----
@@ -307,7 +365,7 @@ _ALWAYS = ("id", "source", "date", "date_precision", "year", "month", "hazard",
            "title", "source_url")
 _OPTIONAL = ("deaths", "missing", "injured", "people_affected",
              "houses_destroyed", "houses_damaged", "place_detail",
-             "report_sources", "glide")
+             "report_sources", "glide", "palika", "palika_pcode")
 
 
 def slugify(name: str) -> str:
@@ -370,6 +428,7 @@ def main():
 
     gdf = choropleth_geometry()
     build_districts(features, gdf, load_pop())   # uses full props, before trim
+    build_palikas(features)                      # stamps palika/palika_pcode too
     build_calendar(features)
     write_meta(features)
     write_events_split(features)                 # trims props in place, writes files

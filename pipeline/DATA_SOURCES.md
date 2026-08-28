@@ -32,14 +32,17 @@
 
 ## Manual (optional — improve resolution, not required to build)
 
-### 4. Nepal administrative boundaries (COD-AB)
-- HDX: <https://data.humdata.org/dataset/cod-ab-npl>
-- Download the **district** layer (`adm2`) and **province** layer (`adm1`) as
-  GeoJSON (or the shapefile / gpkg).
-- Save as `data/raw/npl_adm2_districts.geojson` and
-  `data/raw/npl_adm1_provinces.geojson`.
-- Note the district name field (usually `DIST_EN` / `ADM2_EN`) — set it in
-  `aggregate.py` if it differs.
+### 4. Nepal administrative boundaries (COD-AB)  — HDX, scriptable
+- Package: <https://data.humdata.org/dataset/cod-ab-npl> (CKAN API is reachable).
+- Download `npl_admin_boundaries.geojson.zip`, extract:
+  - `npl_admin2.geojson` (77 districts) → `data/raw/npl_adm2_districts.geojson`
+  - `npl_admin3.geojson` (775 local units / palikas) → `data/raw/npl_adm3_palikas.geojson`
+- `aggregate.py` prefers these over the bundled DesInventar shapefile and uses
+  fields `adm2_name` / `adm3_name` / `adm3_pcode`.
+- **No adm4 (ward) polygons exist in any open Nepal dataset.** Municipality
+  (adm3) is the drill-down floor; BIPAD ward *numbers* live in the event titles.
+- `aggregate.py` also writes simplified `data/processed/districts_boundary.geojson`
+  and `palikas.geojson` for the web map.
 
 ### 5. Nepal district population (COD-PS)
 - HDX: <https://data.humdata.org/dataset/cod-ps-npl> (2021 census).

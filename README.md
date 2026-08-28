@@ -52,12 +52,17 @@ python make_demo.py          # -> data/processed/events.geojson (SYNTHETIC)
 # real build:
 python fetch_bipad.py        # Nepal DRR/BIPAD API  -> bipad_incidents.jsonl (resumable)
 python fetch_desinventar.py  # DesInventar Sentinel  -> desinventar_npl.xml + shapefiles
+python fetch_boundaries.py   # HDX COD-AB -> npl_adm2_districts.geojson + npl_adm3_palikas.geojson
 python fetch_nasa_glc.py     # NASA GLC (optional; exits clean if endpoint down)
 python clean_merge.py        # -> events.geojson (normalise, scope-filter, light dedup)
 python aggregate.py          # -> events.geojson (coords+dedup), districts.geojson,
-                             #    district_index.json, calendar.json, events_by_district/
+                             #    district_index.json, palika_index.json, palikas.geojson,
+                             #    calendar.json, events_by_district/, meta.json
 python outlook.py            # -> outlook.json  (seasonal climatology for the
                              #    Experimental section — descriptive, not a forecast)
+# optional experimental layers:
+python susceptibility.py     # -> susceptibility.json  (needs hazard rasters, §6)
+python fetch_nowcast.py      # -> nowcast.json         (needs EARTHDATA_TOKEN, §8)
 
 # current output: ~13,000 events, 1971-2026, from BIPAD + DesInventar.
 # NASA GLC and HDX boundaries/population are optional add-ons (see DATA_SOURCES.md).

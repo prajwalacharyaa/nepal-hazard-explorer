@@ -33,6 +33,7 @@ async function init() {
   renderAnswers();
   renderMiniMap();
   renderCharts();
+  renderPalikas();
   renderTable();
   wireDownloads();
   document.getElementById("d-src").innerHTML =
@@ -196,6 +197,43 @@ function renderTable() {
       th.dataset.sort = sortDir < 0 ? "desc" : "asc";
     };
   });
+}
+
+let pSortKey = "events", pSortDir = -1;
+async function renderPalikas() {
+  let idx;
+  try { idx = await loadJSON(paths.palikaIndex); } catch (e) { return; }
+  const rows = Object.values(idx).filter((p) => (p.district || "") === NAME);
+  if (!rows.length) return;
+  document.getElementById("palika-section").hidden = false;
+  const tb = document.querySelector("#p-table tbody");
+  const draw = () => {
+    const sorted = [...rows].sort((a, b) => {
+      const av = a[pSortKey] ?? "", bv = b[pSortKey] ?? "";
+      return (av < bv ? -1 : av > bv ? 1 : 0) * pSortDir;
+    });
+    tb.innerHTML = "";
+    for (const p of sorted) {
+      const w = p.worst;
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td>${p.palika}</td><td>${fmt(p.events)}</td><td>${fmt(p.deaths)}</td>
+         <td>${p.last_year || ""}</td>
+         <td class="muted">${w ? `${hazardName(w.hazard)} ${readableDate(w.date)}` +
+           (w.deaths ? `, ${w.deaths} dead` : "") +
+           ` <a href="event.html?id=${encodeURIComponent(w.id)}&d=${slug}">›</a>` : ""}</td>`;
+      tb.appendChild(tr);
+    }
+  };
+  document.querySelectorAll("#p-table th[data-k]").forEach((th) => {
+    th.onclick = () => {
+      const k = th.dataset.k;
+      pSortDir = pSortKey === k ? -pSortDir : -1; pSortKey = k; draw();
+      document.querySelectorAll("#p-table th").forEach((x) => (x.dataset.sort = ""));
+      th.dataset.sort = pSortDir < 0 ? "desc" : "asc";
+    };
+  });
+  draw();
 }
 
 function wireDownloads() {

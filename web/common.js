@@ -26,6 +26,9 @@
     meta: `${DATA}/meta.json`,
     outlook: `${DATA}/outlook.json`,
     susceptibility: `${DATA}/susceptibility.json`,
+    palikaIndex: `${DATA}/palika_index.json`,
+    palikas: `${DATA}/palikas.geojson`,
+    districtsBoundary: `${DATA}/districts_boundary.geojson`,
   };
 
   // fetch meta.json and drop a one-line freshness stamp into `sel`

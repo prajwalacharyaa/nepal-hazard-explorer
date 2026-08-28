@@ -7,8 +7,8 @@ const state = {
   hazards: new Set(Object.keys(HAZARD_COLORS)),
   yearMin: 1971, yearMax: new Date().getFullYear(),
   metric: "events",
-  data: { events: null, districts: null, calendar: null, index: null },
-  anim: null, hexYear: null,
+  data: { events: null, districts: null, calendar: null, index: null, palikaIndex: null },
+  anim: null, hexYear: null, palikaLoaded: false,
 };
 
 const map = new maplibregl.Map({
@@ -33,6 +33,7 @@ async function loadAll() {
   if (di.status === "fulfilled") state.data.districts = di.value;
   if (ca.status === "fulfilled") state.data.calendar = ca.value;
   if (ix.status === "fulfilled") state.data.index = ix.value;
+  loadJSON(paths.palikaIndex).then((v) => (state.data.palikaIndex = v)).catch(() => {});
 
   if (!state.data.events) {
     document.getElementById("stats").innerHTML =
@@ -102,7 +103,10 @@ function addChoroplethLayer() {
       paint: { "fill-color": "#333", "fill-opacity": 0.72 } });
     map.addLayer({ id: "choro-line", type: "line", source: "districts",
       paint: { "line-color": "#0b0d10", "line-width": 0.6 } });
-    map.on("click", "choro", (e) => openAreaCard(e.features[0].properties.district, e.lngLat));
+    map.on("click", "choro", (e) => {
+      if (map.getZoom() >= 8) return;   // palika layer handles clicks when zoomed in
+      openAreaCard(e.features[0].properties.district, e.lngLat);
+    });
     map.on("mouseenter", "choro", () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", "choro", () => (map.getCanvas().style.cursor = ""));
   }
@@ -175,6 +179,56 @@ function drawCalendar() {
     .attr("fill", (d) => (d.count ? color(Math.sqrt(d.count)) : "#20242b"))
     .append("title").text((d) => `${d.y}-${String(d.mo).padStart(2, "0")}: ${d.count} events`);
   el.append(svg.node());
+}
+
+/* --------------------------------------------------------- palika layer -- */
+async function ensurePalikaLayer() {
+  if (state.palikaLoaded) return;
+  state.palikaLoaded = true;
+  let gj;
+  try { gj = await loadJSON(paths.palikas); } catch (e) { return; }
+  map.addSource("palikas", { type: "geojson", data: gj });
+  map.addLayer({
+    id: "palika-fill", type: "fill", source: "palikas", minzoom: 8,
+    paint: { "fill-color": "#ff7a45", "fill-opacity": 0.04 },
+  });
+  map.addLayer({
+    id: "palika-line", type: "line", source: "palikas", minzoom: 8,
+    paint: { "line-color": "#7a5a44", "line-width": 0.5 },
+  });
+  map.on("click", "palika-fill", (e) => {
+    openPalikaCard(e.features[0].properties.adm3_pcode,
+                   e.features[0].properties.adm3_name, e.lngLat);
+  });
+  map.on("mouseenter", "palika-fill", () => (map.getCanvas().style.cursor = "pointer"));
+  map.on("mouseleave", "palika-fill", () => (map.getCanvas().style.cursor = ""));
+}
+map.on("zoomend", () => { if (map.getZoom() >= 7.8) ensurePalikaLayer(); });
+
+function openPalikaCard(pcode, name, lngLat) {
+  const card = document.getElementById("area-card");
+  const ix = state.data.palikaIndex && state.data.palikaIndex[pcode];
+  const dslug = ix ? slugify(ix.district) : "";
+  if (!ix) {
+    card.innerHTML = `<button class="x">×</button><h3>${name}</h3>
+      <p class="muted">municipality</p><p>No recorded events in this dataset.</p>`;
+  } else {
+    const hz = Object.entries(ix.by_hazard).filter(([, n]) => n)
+      .sort((a, b) => b[1] - a[1])
+      .map(([h, n]) => `<span class="tag" style="color:${HAZARD_COLORS[h]}">${hazardName(h)} ${n}</span>`).join(" ");
+    const w = ix.worst;
+    card.innerHTML = `<button class="x">×</button>
+      <h3>${ix.palika}</h3>
+      <p class="muted">${ix.district} district · municipality</p>
+      <p class="big">${fmt(ix.events)} events · ${fmt(ix.deaths)} deaths</p>
+      <p class="muted">${ix.first_year}–${ix.last_year}</p>
+      <p>${hz}</p>
+      ${w ? `<p class="muted">Worst: ${hazardName(w.hazard)}, ${readableDate(w.date)} —
+        ${fmt(w.deaths)} dead <a href="event.html?id=${encodeURIComponent(w.id)}&d=${dslug}">details</a></p>` : ""}
+      <a class="cta" href="district.html?d=${encodeURIComponent(dslug)}">Open ${ix.district} district page →</a>`;
+  }
+  card.hidden = false;
+  card.querySelector(".x").onclick = () => (card.hidden = true);
 }
 
 /* ------------------------------------------------------------ area card --- */
