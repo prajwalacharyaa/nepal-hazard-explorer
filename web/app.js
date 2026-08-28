@@ -17,7 +17,7 @@ const state = {
   view: "heatmap",
   hazards: new Set(Object.keys(HAZARD_COLORS)),
   yearMin: 1971, yearMax: new Date().getFullYear(),
-  metric: "events", preciseOnly: false, calMetric: "count",
+  metric: "events", preciseOnly: false, calMetric: "count", heatBoost: 1,
   data: { events: null, districts: null, calendar: null, index: null, palikaIndex: null },
   anim: null, hexYear: null, palikaLoaded: false,
 };
@@ -95,6 +95,8 @@ async function loadAll() {
   buildPlaceIndex();
   document.getElementById("precise-only").checked = state.preciseOnly;
   document.getElementById("metric").value = state.metric;
+  document.getElementById("heat-boost").value = state.heatBoost;
+  document.getElementById("heat-label").textContent = `${state.heatBoost.toFixed(1)}×`;
   updateStats();                       // panel is useful before the map paints
   const go = () => setView(initialView || "heatmap");
   map.loaded() ? go() : map.once("load", go);
@@ -114,6 +116,10 @@ function applyHash() {
   if (p.get("p") === "1") state.preciseOnly = true;
   if (p.has("m")) state.metric = p.get("m");
   if (p.has("cm")) state.calMetric = p.get("cm");
+  if (p.has("hb")) {
+    const b = parseFloat(p.get("hb"));
+    if (b >= 0.5 && b <= 3) state.heatBoost = b;
+  }
   return p.get("v");
 }
 function syncHash() {
@@ -125,6 +131,7 @@ function syncHash() {
   if (state.preciseOnly) p.set("p", "1");
   if (state.metric !== "events") p.set("m", state.metric);
   if (state.calMetric !== "count") p.set("cm", state.calMetric);
+  if (state.heatBoost !== 1) p.set("hb", String(state.heatBoost));
   const q = p.toString();
   history.replaceState(null, "", q ? "#" + q : location.pathname + location.search);
 }
@@ -138,6 +145,28 @@ function filteredEvents() {
       p.year >= state.yearMin && p.year <= state.yearMax &&
       (!state.preciseOnly || p.geo_precision === "exact");
   });
+}
+
+/* ---- heat layer tuning -------------------------------------------------
+   ~13k points over a small country saturate easily, so the baseline is
+   conservative. state.heatBoost (0.5–3) scales it, letting you dial the
+   overlay up when a narrow filter leaves only a handful of events. */
+function heatIntensity() {
+  const b = state.heatBoost;
+  return ["interpolate", ["linear"], ["zoom"],
+    4, 0.45 * b, 7, 0.7 * b, 10, 1.05 * b, 14, 1.5 * b];
+}
+function heatRadius() {
+  // a slightly wider kernel at high boost keeps lone events from being a
+  // single hard pixel
+  const g = 1 + (state.heatBoost - 1) * 0.35;
+  return ["interpolate", ["linear"], ["zoom"],
+    4, 7 * g, 7, 12 * g, 10, 19 * g, 14, 30 * g];
+}
+function applyHeatBoost() {
+  if (!map.getLayer("heat")) return;
+  map.setPaintProperty("heat", "heatmap-intensity", heatIntensity());
+  map.setPaintProperty("heat", "heatmap-radius", heatRadius());
 }
 
 /* ------------------------------------------------------------ map layers -- */
@@ -158,10 +187,8 @@ function addHeatmapLayer() {
         ["case", ["==", ["get", "geo_precision"], "exact"], 1.0, 0.5],
         ["interpolate", ["linear"],
           ["ln", ["+", 1, ["get", "severity_score"]]], 0, 0.15, 8, 1]],
-      // ~13k points over a small country saturate very easily — keep intensity
-      // low and the radius tight so this reads as density, not a red mask.
-      "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 4, 0.35, 7, 0.55, 10, 0.9, 14, 1.4],
-      "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 4, 6, 7, 11, 10, 18, 14, 30],
+      "heatmap-intensity": heatIntensity(),
+      "heatmap-radius": heatRadius(),
       // fade out as the individual points take over
       "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.85, 11, 0.55, 14, 0.3],
       "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], ...THEME.heat],
@@ -423,6 +450,7 @@ function setView(v) {
     b.setAttribute("aria-selected", String(on));
   });
   document.getElementById("metric-group").hidden = v !== "choropleth";
+  document.getElementById("heat-group").hidden = v !== "heatmap";
   document.getElementById("calendar-panel").hidden = v !== "calendar";
   document.getElementById("timeline").hidden = v !== "hexbin";
   document.getElementById("year-group").hidden = v === "calendar";
@@ -602,6 +630,12 @@ function stopAnim() {
 
 document.querySelectorAll("#view-tabs button").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
 document.getElementById("metric").onchange = (e) => { state.metric = e.target.value; paintChoropleth(); syncHash(); };
+document.getElementById("heat-boost").oninput = (e) => {
+  state.heatBoost = +e.target.value;
+  document.getElementById("heat-label").textContent = `${state.heatBoost.toFixed(1)}×`;
+  applyHeatBoost();
+  syncHash();
+};
 document.getElementById("precise-only").onchange = (e) => { state.preciseOnly = e.target.checked; refresh(); };
 
 document.getElementById("near-me").onclick = () => {
@@ -694,6 +728,10 @@ document.getElementById("reset-filters").onclick = () => {
   document.getElementById("year-min").value = state.absMin;
   document.getElementById("year-max").value = state.absMax;
   document.getElementById("year-label").textContent = `${state.absMin}–${state.absMax}`;
+  state.heatBoost = 1;
+  document.getElementById("heat-boost").value = 1;
+  document.getElementById("heat-label").textContent = "1.0×";
+  applyHeatBoost();
   document.querySelectorAll("#hazard-filter .pill").forEach((b) => b.setAttribute("aria-pressed", "true"));
   refresh();      // the open area card refreshes with everything else
 };
