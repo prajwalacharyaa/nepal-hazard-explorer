@@ -19,10 +19,11 @@ import requests
 
 from config import RAW, NEPAL_BBOX
 
-# NASA Maps ArcGIS FeatureServer for the Global Landslide Catalog point layer.
+# COOLR / Global Landslide Catalog point layer (NASA Disasters ArcGIS host).
+# Portal: https://landslides.nasa.gov/viewer
 GLC_URL = (
-    "https://maps.nccs.nasa.gov/server/rest/services/"
-    "global_landslide_catalog/global_landslide_catalog/MapServer/0/query"
+    "https://maps.disasters.nasa.gov/ags01/rest/services/"
+    "Hosted/nasa_glc_poly_point/FeatureServer/0/query"
 )
 PAGE = 1000
 TIMEOUT = 60
@@ -51,7 +52,14 @@ def q(offset: int) -> dict:
             wait = 2 ** attempt
             print(f"  ! {e} — retry in {wait}s", file=sys.stderr)
             time.sleep(wait)
-    raise SystemExit("giving up on NASA GLC service")
+    print(
+        "\nNASA GLC service unreachable. This source is OPTIONAL — skip it, or\n"
+        "download the CSV manually from https://landslides.nasa.gov/viewer\n"
+        "(Download > CSV), filter to Nepal, save as data/raw/nasa_glc_nepal.csv\n"
+        "clean_merge.py picks up either file.",
+        file=sys.stderr,
+    )
+    raise SystemExit(0)
 
 
 def main():

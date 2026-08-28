@@ -9,13 +9,15 @@
 - After running, read `data/raw/bipad_hazards.json` and add any unseen hazard
   labels to `HAZARD_MAP` in `config.py`.
 
-### 2. NASA Global Landslide Catalog (COOLR)  — `fetch_nasa_glc.py`
-- ArcGIS FeatureServer, no key. Clipped to Nepal bbox.
-- Covers ~2007–2016. Fields: `landslide_size` (small/medium/large/very_large/
-  catastrophic), `landslide_trigger`, `fatality_count`, `injury_count`, `source_name`.
-- Fallback if the service URL breaks: download the global CSV from
-  <https://catalog.data.gov/dataset/global-landslide-catalog-export> or the HDX
-  mirror, save as `data/raw/nasa_glc_nepal.csv` (clean_merge accepts CSV too).
+### 2. NASA Global Landslide Catalog / COOLR  — `fetch_nasa_glc.py`  *(OPTIONAL)*
+- NASA keeps moving this endpoint; the script tries an ArcGIS FeatureServer and
+  exits cleanly if it 404s/503s. BIPAD already covers landslides 2011–present,
+  so this source only adds ~2007–2016 depth.
+- Manual route: open <https://landslides.nasa.gov/viewer> → **Download** → CSV,
+  filter/clip to Nepal, save as `data/raw/nasa_glc_nepal.csv`.
+- Useful fields: `landslide_category`, `landslide_trigger`, `landslide_size`
+  (small…catastrophic), `fatality_count`, `injury_count`, `source_name`.
+- `clean_merge.py` reads `nasa_glc_nepal.geojson` **or** `nasa_glc_nepal.csv`.
 
 ## Manual (3 files, one-time)
 
