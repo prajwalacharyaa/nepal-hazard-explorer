@@ -183,11 +183,15 @@ def choropleth_geometry():
             if c in gdf.columns:
                 gdf = gdf.rename(columns={c: "district"})
                 break
+        pc = next((c for c in ("adm2_pcode", "ADM2_PCODE") if c in gdf.columns), None)
+        gdf["pcode"] = gdf[pc] if pc else None
+        gdf = gdf[["district", "pcode", "geometry"]]
         src = "HDX COD-AB adm2"
     else:
         gdf = gpd.read_file(SHAPES / "district.shp").set_crs(4326, allow_override=True)
         gdf = gdf.rename(columns={"NAME": "district"})
-        gdf = gdf[["district", "geometry"]]
+        gdf["pcode"] = None
+        gdf = gdf[["district", "pcode", "geometry"]]
         src = "DesInventar bundled district.shp"
     gdf["district"] = gdf["district"].astype(str).str.strip().str.title()
     print(f"  choropleth base: {src} ({len(gdf)} polygons)")
@@ -195,19 +199,27 @@ def choropleth_geometry():
 
 
 def load_pop():
+    """{pcode: total, name_title: total} from HDX COD-PS adm2 (T_TL column)."""
     if not POP_CSV.exists():
+        print("  (no npl_pop_adm2.csv — deaths-per-100k disabled)")
         return {}
-    df = pd.read_csv(POP_CSV)
-    name_c = next((c for c in df.columns if df[c].dtype == object), df.columns[0])
-    val_c = next((c for c in df.columns if str(c).lower() in
-                  ("t_tl", "total", "population", "pop", "totalpop")), None)
-    if val_c is None:
-        num = df.select_dtypes("number")
-        val_c = num.columns[num.sum().argmax()] if len(num.columns) else None
+    df = pd.read_csv(POP_CSV, encoding="utf-8-sig")
+    name_c = next((c for c in df.columns if c.upper() in ("ADM2_EN", "DISTRICT", "NAME")), None)
+    pc_c = next((c for c in df.columns if c.upper() == "ADM2_PCODE"), None)
+    val_c = next((c for c in df.columns if c.upper() in ("T_TL", "TOTAL", "POPULATION", "POP")), None)
     if val_c is None:
         return {}
-    return {str(k).strip().title(): int(v)
-            for k, v in zip(df[name_c], df[val_c]) if pd.notna(v)}
+    out = {}
+    for _, r in df.iterrows():
+        try:
+            v = int(float(r[val_c]))
+        except (TypeError, ValueError):
+            continue
+        if pc_c and pd.notna(r[pc_c]):
+            out[str(r[pc_c]).strip()] = v
+        if name_c and pd.notna(r[name_c]):
+            out[str(r[name_c]).strip().title()] = v
+    return out
 
 
 def _round_geom(o, nd=5):
@@ -290,16 +302,17 @@ def build_districts(features, gdf, pop):
     for row in gdf.itertuples():
         d = row.district
         a = agg.get(d)
-        props = {"district": d, "population": pop.get(d)}
+        pv = pop.get(getattr(row, "pcode", None)) or pop.get(d)   # pcode first, then name
+        props = {"district": d, "population": pv}
         if a:
             props.update(events=a["events"], deaths=a["deaths"], missing=a["missing"],
                          injured=a["injured"], houses_destroyed=a["houses_destroyed"],
                          severity_score=round(a["severity_score"], 1),
                          by_hazard=a["by_hazard"],
                          first_year=a["first_year"], last_year=a["last_year"])
-            if pop.get(d):
-                props["deaths_per_100k"] = round(a["deaths"] / pop[d] * 1e5, 2)
-            index[d] = _index_row(d, a, "district", pop.get(d))
+            if pv:
+                props["deaths_per_100k"] = round(a["deaths"] / pv * 1e5, 2)
+            index[d] = _index_row(d, a, "district", pv)
         else:
             props.update(events=0, deaths=0, missing=0, injured=0, houses_destroyed=0,
                          severity_score=0.0, by_hazard={h: 0 for h in HAZARDS},
