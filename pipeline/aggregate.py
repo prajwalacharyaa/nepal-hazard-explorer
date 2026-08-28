@@ -385,22 +385,25 @@ def build_calendar(features):
 
 
 # ---------------------------------------------------------------- trimming ----
-# fields always kept; count fields kept only when non-zero to shrink the file
-_ALWAYS = ("id", "source", "date", "date_precision", "year", "month", "hazard",
-           "district", "geo_precision", "severity_score", "severity_class",
-           "title", "source_url")
-_OPTIONAL = ("deaths", "missing", "injured", "people_affected",
-             "houses_destroyed", "houses_damaged", "place_detail",
-             "report_sources", "glide", "palika", "palika_pcode")
+# MAP copy (events.geojson) — only what the map layers + popups need.
+_MAP_KEEP = ("id", "source", "date", "date_precision", "year", "month", "hazard",
+             "district", "geo_precision", "severity_score", "severity_class", "title")
+_MAP_OPT = ("deaths", "missing")
+# FULL copy (events_by_district/*.json) — everything a research download / the
+# event permalink page needs.
+_FULL_KEEP = _MAP_KEEP + ("source_url",)
+_FULL_OPT = ("deaths", "missing", "injured", "people_affected", "houses_destroyed",
+             "houses_damaged", "place_detail", "report_sources", "glide",
+             "palika", "palika_pcode")
 
 
 def slugify(name: str) -> str:
     return "".join(c.lower() if c.isalnum() else "-" for c in str(name)).strip("-")
 
 
-def trim_props(p: dict) -> dict:
-    out = {k: p[k] for k in _ALWAYS if p.get(k) is not None}
-    for k in _OPTIONAL:
+def _trim(p: dict, keep, opt) -> dict:
+    out = {k: p[k] for k in keep if p.get(k) is not None}
+    for k in opt:
         v = p.get(k)
         if v not in (None, 0, "", "0"):
             out[k] = v
@@ -408,22 +411,31 @@ def trim_props(p: dict) -> dict:
 
 
 def write_events_split(features):
-    """Full trimmed events.geojson for the map, plus one small file per district
-    for the district pages / downloads."""
+    """Lean events.geojson for the map + one fuller file per district for the
+    detail pages and downloads."""
     for f in features:
-        f["properties"] = trim_props(f["properties"])
         f["geometry"]["coordinates"] = [round(c, 4) for c in f["geometry"]["coordinates"]]
 
-    features.sort(key=lambda f: str(f["properties"]["id"]))   # reproducible file
-    (PROCESSED / "events.geojson").write_text(
-        json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False),
-        encoding="utf-8")
-    kb = (PROCESSED / "events.geojson").stat().st_size / 1024
-    print(f"  events.geojson: {len(features)} events, {kb:.0f} KB")
-
+    # per-district files: full props
     by_d = defaultdict(list)
     for f in features:
-        by_d[f["properties"].get("district") or "unknown"].append(f)
+        d = f["properties"].get("district") or "unknown"
+        by_d[d].append({
+            "type": "Feature", "geometry": f["geometry"],
+            "properties": _trim(f["properties"], _FULL_KEEP, _FULL_OPT),
+        })
+
+    # map file: lean props
+    lean = [{
+        "type": "Feature", "geometry": f["geometry"],
+        "properties": _trim(f["properties"], _MAP_KEEP, _MAP_OPT),
+    } for f in features]
+    lean.sort(key=lambda f: str(f["properties"]["id"]))
+    (PROCESSED / "events.geojson").write_text(
+        json.dumps({"type": "FeatureCollection", "features": lean}, ensure_ascii=False),
+        encoding="utf-8")
+    kb = (PROCESSED / "events.geojson").stat().st_size / 1024
+    print(f"  events.geojson: {len(lean)} events, {kb:.0f} KB (lean)")
     outdir = PROCESSED / "events_by_district"
     outdir.mkdir(exist_ok=True)
     for old in outdir.glob("*.json"):
