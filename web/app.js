@@ -238,6 +238,7 @@ function openPalikaCard(pcode, name, lngLat) {
       <a class="cta" href="district.html?d=${encodeURIComponent(dslug)}">Open ${ix.district} district page →</a>`;
   }
   card.hidden = false;
+  if (typeof collapsePanel === "function") collapsePanel();
   card.querySelector(".x").onclick = () => (card.hidden = true);
 }
 
@@ -265,13 +266,18 @@ function openAreaCard(district, lngLat) {
       <a class="cta" href="district.html?d=${encodeURIComponent(slug)}">Open full district page →</a>`;
   }
   card.hidden = false;
+  if (typeof collapsePanel === "function") collapsePanel();
   card.querySelector(".x").onclick = () => (card.hidden = true);
 }
 
 /* ------------------------------------------------------------- view swap -- */
 function setView(v) {
   state.view = v;
-  document.querySelectorAll("#view-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
+  document.querySelectorAll("#view-tabs button").forEach((b) => {
+    const on = b.dataset.view === v;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-selected", String(on));
+  });
   document.getElementById("metric-group").hidden = v !== "choropleth";
   document.getElementById("calendar-panel").hidden = v !== "calendar";
   document.getElementById("timeline").hidden = v !== "hexbin";
@@ -280,11 +286,20 @@ function setView(v) {
     if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
   });
   clearHexbin(); stopAnim();
-  if (v === "heatmap") { addHeatmapLayer(); ["heat", "heat-points"].forEach((id) => map.setLayoutProperty(id, "visibility", "visible")); }
+  if (v === "heatmap") { addHeatmapLayer(); ["heat", "heat-points"].forEach((id) => map.setLayoutProperty(id, "visibility", "visible")); hazardLegend(); }
   else if (v === "choropleth") { addChoroplethLayer(); ["choro", "choro-line"].forEach((id) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", "visible")); }
-  else if (v === "hexbin") { initTimeline(); showHexbin(); }
-  else if (v === "calendar") drawCalendar();
+  else if (v === "hexbin") { initTimeline(); showHexbin(); hazardLegend(); }
+  else if (v === "calendar") { drawCalendar(); document.getElementById("legend").innerHTML = ""; }
   updateStats();
+}
+
+function hazardLegend() {
+  const l = document.getElementById("legend");
+  l.innerHTML = '<span class="field-label">Hazard</span>' +
+    Object.keys(HAZARD_COLORS).map((h) =>
+      `<div class="row"><span class="sw" style="background:${HAZARD_COLORS[h]}"></span>${HAZARD_LABELS[h]}</div>`
+    ).join("") +
+    '<div class="row" style="margin-top:6px"><span class="sw" style="border:1.5px solid #888;background:transparent"></span>approx. location (centroid)</div>';
 }
 function refresh() {
   if (state.view === "heatmap") ensureEventSource();
@@ -299,13 +314,19 @@ function buildHazardChips() {
   const box = document.getElementById("hazard-filter");
   box.innerHTML = "";
   for (const h of Object.keys(HAZARD_COLORS)) {
-    const c = document.createElement("span");
-    c.className = "chip on"; c.textContent = HAZARD_LABELS[h]; c.style.color = HAZARD_COLORS[h];
-    c.onclick = () => {
-      state.hazards.has(h) ? state.hazards.delete(h) : state.hazards.add(h);
-      c.classList.toggle("on"); refresh();
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pill";
+    b.style.color = HAZARD_COLORS[h];
+    b.setAttribute("aria-pressed", String(state.hazards.has(h)));
+    b.innerHTML = `<span class="dot"></span>${HAZARD_LABELS[h]}`;
+    b.onclick = () => {
+      const on = !state.hazards.has(h);
+      on ? state.hazards.add(h) : state.hazards.delete(h);
+      b.setAttribute("aria-pressed", String(on));
+      refresh();
     };
-    box.appendChild(c);
+    box.appendChild(b);
   }
 }
 function initYearSliders() {
@@ -339,11 +360,12 @@ document.getElementById("play").onclick = () => {
   if (state.anim) return stopAnim();
   const s = document.getElementById("time-slider");
   document.getElementById("play").textContent = "⏸";
+  const step = matchMedia("(prefers-reduced-motion: reduce)").matches ? 1600 : 700;
   state.anim = setInterval(() => {
     let y = +s.value + 1; if (y > +s.max) y = +s.min;
     s.value = y; state.hexYear = y;
     document.getElementById("time-label").textContent = y; showHexbin();
-  }, 700);
+  }, step);
 };
 function stopAnim() {
   if (state.anim) { clearInterval(state.anim); state.anim = null; }
@@ -356,20 +378,33 @@ document.getElementById("precise-only").onchange = (e) => { state.preciseOnly = 
 
 document.getElementById("near-me").onclick = () => {
   const btn = document.getElementById("near-me");
-  btn.textContent = "locating…";
+  const reset = () => (btn.textContent = "Use my location");
+  btn.textContent = "Locating…";
+  if (!navigator.geolocation) { reset(); alert("Geolocation not available."); return; }
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      btn.textContent = "📍 Use my location";
+      reset();
       const pt = [pos.coords.longitude, pos.coords.latitude];
       map.flyTo({ center: pt, zoom: 9 });
+      collapsePanel();
       const d = districtAt(pt);
       if (d) openAreaCard(d, { lng: pt[0], lat: pt[1] });
-      else alert("Location doesn't fall inside a Nepal district in this dataset.");
+      else alert("Your location isn't inside a Nepal district in this dataset.");
     },
-    () => { btn.textContent = "📍 Use my location"; alert("Could not get your location."); },
+    () => { reset(); alert("Could not get your location."); },
     { enableHighAccuracy: true, timeout: 10000 },
   );
 };
+
+/* mobile bottom-sheet handle */
+const panelEl = document.getElementById("panel");
+function collapsePanel() {
+  if (matchMedia("(max-width: 899px)").matches) panelEl.dataset.state = "peek";
+}
+document.getElementById("panel-handle").onclick = () => {
+  panelEl.dataset.state = panelEl.dataset.state === "open" ? "peek" : "open";
+};
+map.on("dragstart", collapsePanel);
 function districtAt(pt) {
   if (!state.data.districts) return null;
   const p = turf.point(pt);
@@ -390,7 +425,7 @@ document.getElementById("download-view").onclick = () => {
 /* ------------------------------------------------------------------ misc -- */
 function legendGradient(stops, metric) {
   const l = document.getElementById("legend");
-  l.innerHTML = `<label>${metric.replace(/_/g, " ")}</label>`;
+  l.innerHTML = `<span class="field-label">${metric.replace(/_/g, " ")}</span>`;
   for (const [val, col] of stops)
     l.insertAdjacentHTML("beforeend",
       `<div class="row"><span class="sw" style="background:${col}"></span>≥ ${Math.round(val)}</div>`);

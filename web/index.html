@@ -2,94 +2,99 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0e13" />
   <title>Nepal Water &amp; Slope Hazard Explorer</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="map"></div>
+  <div id="map" role="region" aria-label="Hazard map of Nepal"></div>
 
-  <aside id="panel">
-    <h1>Nepal Water &amp; Slope Hazards</h1>
-    <p class="sub">Landslides, floods, flash floods, GLOFs, debris flows, avalanches — 1971 to present.</p>
+  <section id="panel" data-state="open" aria-label="Controls">
+    <button id="panel-handle" type="button" aria-label="Expand or collapse panel"></button>
 
-    <div class="group locate">
-      <label>Find your area</label>
-      <button id="near-me">📍 Use my location</button>
-      <select id="district-pick"><option value="">Jump to a district…</option></select>
-      <p class="hint">or click any district on the map</p>
+    <div class="panel-head">
+      <h1>Nepal Water &amp; Slope Hazards</h1>
+      <p class="tagline">Landslides · floods · flash floods · GLOFs · debris flows · avalanches — since 1971</p>
     </div>
 
-    <div class="group">
-      <label>Map view</label>
-      <div id="view-tabs" class="tabs">
-        <button data-view="heatmap" class="active">Density</button>
-        <button data-view="choropleth">Districts</button>
-        <button data-view="hexbin">Hexbin + time</button>
-        <button data-view="calendar">Calendar</button>
+    <div class="panel-body">
+      <div class="field find">
+        <button id="near-me" class="btn btn-primary" type="button">Use my location</button>
+        <select id="district-pick" aria-label="Jump to a district">
+          <option value="">Jump to a district…</option>
+        </select>
+        <p class="hint">or tap any district on the map</p>
       </div>
-    </div>
 
-    <div class="group">
-      <label>Hazard type</label>
-      <div id="hazard-filter" class="chips"></div>
-    </div>
+      <div class="field">
+        <span class="field-label">Map view</span>
+        <div id="view-tabs" class="seg" role="tablist" aria-label="Map view">
+          <button data-view="heatmap" class="active" role="tab" aria-selected="true">Density</button>
+          <button data-view="choropleth" role="tab" aria-selected="false">Districts</button>
+          <button data-view="hexbin" role="tab" aria-selected="false">Hexbin</button>
+          <button data-view="calendar" role="tab" aria-selected="false">Calendar</button>
+        </div>
+      </div>
 
-    <div class="group" id="year-group">
-      <label>Years: <span id="year-label"></span></label>
-      <input type="range" id="year-min" />
-      <input type="range" id="year-max" />
-    </div>
+      <div class="field">
+        <span class="field-label">Hazard type</span>
+        <div id="hazard-filter" class="pills" role="group" aria-label="Filter by hazard type"></div>
+      </div>
 
-    <div class="group">
-      <label class="inline-check">
+      <div class="field" id="year-group">
+        <span class="field-label">Years <b id="year-label"></b></span>
+        <div class="range-wrap">
+          <input type="range" id="year-min" aria-label="Earliest year" />
+          <input type="range" id="year-max" aria-label="Latest year" />
+        </div>
+      </div>
+
+      <label class="switch">
         <input type="checkbox" id="precise-only" />
-        Precise locations only
+        <span class="txt">Precise locations only
+          <small>Older records sit on village/district centroids — shown as hollow dots.</small>
+        </span>
       </label>
-      <p class="hint">Older records sit on village/district centroids. Hollow dots
-        = approximate.</p>
+
+      <div class="field" id="metric-group" hidden>
+        <span class="field-label">District shading</span>
+        <select id="metric">
+          <option value="events">Event count</option>
+          <option value="deaths">Deaths</option>
+          <option value="deaths_per_100k">Deaths per 100k</option>
+          <option value="severity_score">Severity score</option>
+        </select>
+      </div>
+
+      <div id="stats" aria-live="polite"></div>
+
+      <details class="more">
+        <summary>Legend, downloads &amp; about</summary>
+        <div id="legend"></div>
+        <button id="download-view" class="btn" type="button">⬇ Download current view (CSV + GeoJSON)</button>
+        <a href="experimental.html" class="btn">🧪 Experimental hazard outlook →</a>
+        <a href="methodology.html" class="btn">📖 Methodology &amp; data notes →</a>
+        <p class="src" id="meta-stamp"></p>
+        <p class="src">
+          Sources: <a href="https://bipadportal.gov.np" target="_blank" rel="noopener">Nepal DRR/BIPAD</a>,
+          <a href="https://www.desinventar.net" target="_blank" rel="noopener">DesInventar Sentinel</a>,
+          curated major events. Not an authoritative hazard assessment.
+        </p>
+      </details>
     </div>
-
-    <div class="group" id="metric-group" hidden>
-      <label>District shading</label>
-      <select id="metric">
-        <option value="events">Event count</option>
-        <option value="deaths">Deaths</option>
-        <option value="deaths_per_100k">Deaths per 100k</option>
-        <option value="severity_score">Severity score</option>
-      </select>
-    </div>
-
-    <div id="legend" class="group"></div>
-    <div id="stats" class="group"></div>
-
-    <div class="group">
-      <button id="download-view" class="secondary">⬇ Download current selection (CSV + GeoJSON)</button>
-    </div>
-
-    <div class="group">
-      <a href="experimental.html" class="secondary">🧪 Experimental hazard outlook →</a>
-      <a href="methodology.html" class="secondary">📖 Methodology &amp; data notes →</a>
-    </div>
-
-    <p class="src" id="meta-stamp"></p>
-    <p class="src">
-      Sources: <a href="https://bipadportal.gov.np" target="_blank" rel="noopener">Nepal DRR/BIPAD</a>,
-      <a href="https://www.desinventar.net" target="_blank" rel="noopener">DesInventar Sentinel</a>,
-      curated major events. Coordinates for older records are village/district
-      centroids. Not an authoritative hazard assessment.
-    </p>
-  </aside>
+  </section>
 
   <div id="calendar-panel" hidden></div>
+
   <div id="timeline" hidden>
-    <button id="play">▶</button>
-    <input type="range" id="time-slider" />
+    <button id="play" type="button" aria-label="Play / pause animation">▶</button>
+    <input type="range" id="time-slider" aria-label="Year" />
     <span id="time-label"></span>
   </div>
 
-  <div id="area-card" hidden></div>
+  <div id="area-card" hidden role="dialog" aria-label="Area detail"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/deck.gl@9.0.38/dist.min.js"></script>
