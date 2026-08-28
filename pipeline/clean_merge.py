@@ -21,7 +21,8 @@ from datetime import datetime
 import pandas as pd
 
 from config import (
-    RAW, PROCESSED, NEPAL_BBOX, HAZARD_MAP, SEVERITY_WEIGHTS, severity_class,
+    RAW, PROCESSED, NEPAL_BBOX, HAZARD_MAP, KEEP_HAZARDS, SEVERITY_WEIGHTS,
+    severity_class,
 )
 
 UNMAPPED: set[str] = set()
@@ -332,6 +333,10 @@ def main():
     if not rows:
         raise SystemExit("no input rows — run the fetch scripts / add manual files first")
 
+    before = len(rows)
+    rows = [r for r in rows if r["hazard"] in KEEP_HAZARDS]
+    print(f"  scope filter: {before} -> {len(rows)} (kept {sorted(KEEP_HAZARDS)})")
+
     rows = dedupe(rows)
     for r in rows:
         r["severity_score"] = score(r)
@@ -354,11 +359,33 @@ def main():
     )
     print(f"wrote {out}  ({len(feats)} events)")
 
+    _write_calendar(rows)
+
     if UNMAPPED:
         (PROCESSED / "unmapped_hazards.txt").write_text(
             "\n".join(sorted(UNMAPPED)), encoding="utf-8"
         )
         print(f"  {len(UNMAPPED)} unmapped hazard labels -> unmapped_hazards.txt")
+
+
+def _write_calendar(rows):
+    """year-month aggregates — no geometry needed, so build it here."""
+    from collections import defaultdict
+    cal = defaultdict(lambda: {"count": 0, "score": 0.0, "by_hazard": defaultdict(int)})
+    for r in rows:
+        if not r.get("year") or not r.get("month"):
+            continue
+        k = f'{r["year"]}-{r["month"]:02d}'
+        cal[k]["count"] += 1
+        cal[k]["score"] += float(r.get("severity_score") or 0)
+        cal[k]["by_hazard"][r["hazard"]] += 1
+    out = {
+        k: {"count": v["count"], "score": round(v["score"], 1),
+            "by_hazard": dict(v["by_hazard"])}
+        for k, v in sorted(cal.items())
+    }
+    (PROCESSED / "calendar.json").write_text(json.dumps(out), encoding="utf-8")
+    print(f"wrote calendar.json  ({len(out)} year-months)")
 
 
 if __name__ == "__main__":

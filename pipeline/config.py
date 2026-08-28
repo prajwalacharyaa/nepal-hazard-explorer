@@ -40,6 +40,11 @@ HAZARD_MAP = {
 
 HAZARDS = ["landslide", "flood", "flash_flood", "glof", "debris_flow", "avalanche", "other"]
 
+# Only these end up in events.geojson. BIPAD also logs fire, thunderbolt, snake
+# bite, epidemic, etc. — out of scope. "Heavy Rainfall" is a driver, not a
+# discrete impact event, so it is deliberately excluded (would inflate floods).
+KEEP_HAZARDS = {"landslide", "flood", "flash_flood", "glof", "debris_flow", "avalanche"}
+
 # --- Severity model --------------------------------------------------------
 # severity_score = sum(weight * count) over the fields below.
 SEVERITY_WEIGHTS = {

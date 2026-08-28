@@ -1,0 +1,17 @@
+Animal Incidents
+Boat Capsize
+Bridge Collapse
+Cold Wave
+Drowning
+Earthquake
+Epidemic
+Fire
+Forest Fire
+Heavy Rainfall
+High Altitude
+Others (Non-Natural)
+Snake Bite
+Snow Storm
+Storm
+Thunderbolt
+Wind Storm
