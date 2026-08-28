@@ -270,58 +270,76 @@ async function ensurePalikaLayer() {
 map.on("zoomend", () => { if (map.getZoom() >= 7.8) ensurePalikaLayer(); });
 
 function openPalikaCard(pcode, name, lngLat) {
-  const card = document.getElementById("area-card");
   const ix = state.data.palikaIndex && state.data.palikaIndex[pcode];
-  const dslug = ix ? slugify(ix.district) : "";
-  if (!ix) {
-    card.innerHTML = `<button class="x">×</button><h3>${name}</h3>
-      <p class="muted">municipality</p><p>No recorded events in this dataset.</p>`;
-  } else {
-    const hz = Object.entries(ix.by_hazard).filter(([, n]) => n)
-      .sort((a, b) => b[1] - a[1])
-      .map(([h, n]) => `<span class="tag" style="color:${HAZARD_COLORS[h]}">${hazardName(h)} ${n}</span>`).join(" ");
-    const w = ix.worst;
-    card.innerHTML = `<button class="x">×</button>
-      <h3>${ix.palika}</h3>
-      <p class="muted">${ix.district} district · municipality</p>
-      <p class="big">${fmt(ix.events)} events · ${fmt(ix.deaths)} deaths</p>
-      <p class="muted">${ix.first_year}–${ix.last_year}</p>
-      <p>${hz}</p>
-      ${w ? `<p class="muted">Worst: ${hazardName(w.hazard)}, ${readableDate(w.date)} —
-        ${fmt(w.deaths)} dead <a href="event.html?id=${encodeURIComponent(w.id)}&d=${dslug}">details</a></p>` : ""}
-      <a class="cta" href="district.html?d=${encodeURIComponent(dslug)}">Open ${ix.district} district page →</a>`;
+  const feats = filteredEvents().filter((f) => f.properties.palika_pcode === pcode);
+  renderAreaCard({
+    title: ix ? ix.palika : name,
+    subtitle: `${ix ? ix.district + " district · " : ""}municipality`,
+    slug: ix ? slugify(ix.district) : slugify(name),
+    feats, allTime: ix,
+  });
+}
+
+/* ------------------------------------------------------------ area card --- */
+function openAreaCard(district, lngLat) {
+  const ix = state.data.index && state.data.index[district];
+  const feats = filteredEvents().filter((f) => f.properties.district === district);
+  renderAreaCard({ title: district, subtitle: "district",
+    slug: slugify(district), feats, allTime: ix });
+}
+
+/* stats for whatever is currently filtered, plus an all-time context line */
+function renderAreaCard({ title, subtitle, slug, feats, allTime }) {
+  const card = document.getElementById("area-card");
+  const rangeTxt = `${state.yearMin}–${state.yearMax}`;
+  const isFull = state.yearMin === state.absMin && state.yearMax === state.absMax
+    && state.hazards.size === Object.keys(HAZARD_COLORS).length && !state.preciseOnly;
+
+  const deaths = feats.reduce((s, f) => s + (f.properties.deaths || 0), 0);
+  const byHaz = {};
+  let worst = null;
+  for (const f of feats) {
+    const p = f.properties;
+    byHaz[p.hazard] = (byHaz[p.hazard] || 0) + 1;
+    if (!worst || (p.severity_score || 0) > (worst.severity_score || 0)) worst = p;
   }
+  const hzChips = Object.entries(byHaz).sort((a, b) => b[1] - a[1])
+    .map(([h, n]) => `<span class="tag" style="color:${HAZARD_COLORS[h]}">${hazardName(h)} ${n}</span>`).join(" ");
+
+  const q = filterQuery();
+  let body;
+  if (!feats.length) {
+    body = `<p class="muted">No recorded events for ${isFull ? "this area" : "the current filter"}.</p>` +
+      (allTime ? `<p class="muted">All-time: ${fmt(allTime.events)} events, ${allTime.first_year}–${allTime.last_year}.</p>` : "");
+  } else {
+    body =
+      `<p class="big">${fmt(feats.length)} events · ${fmt(deaths)} deaths</p>
+       <p class="muted">${rangeTxt}${isFull ? "" : " · current filter"}</p>
+       <p>${hzChips}</p>
+       ${worst ? `<p class="muted">Worst in range: ${hazardName(worst.hazard)}, ${readableDate(worst.date)} —
+         ${fmt(worst.deaths || 0)} dead <a href="event.html?id=${encodeURIComponent(worst.id)}&d=${slug}">details</a></p>` : ""}
+       ${!isFull && allTime ? `<p class="muted">All-time: ${fmt(allTime.events)} events, ${allTime.deaths} deaths, ${allTime.first_year}–${allTime.last_year}.</p>` : ""}`;
+  }
+
+  card.innerHTML = `<button class="x" aria-label="Close">×</button>
+    <h3>${title}</h3>
+    <p class="muted">${subtitle}</p>
+    ${body}
+    <a class="cta" href="district.html?d=${encodeURIComponent(slug)}${q}">Open full district page →</a>`;
   card.hidden = false;
   if (typeof collapsePanel === "function") collapsePanel();
   card.querySelector(".x").onclick = () => (card.hidden = true);
 }
 
-/* ------------------------------------------------------------ area card --- */
-function openAreaCard(district, lngLat) {
-  const card = document.getElementById("area-card");
-  const ix = state.data.index && state.data.index[district];
-  const slug = slugify(district);
-  if (!ix) {
-    card.innerHTML = `<button class="x">×</button><h3>${district}</h3>
-      <p>No recorded events in this dataset.</p>
-      <a class="cta" href="district.html?d=${encodeURIComponent(slug)}">Open district page →</a>`;
-  } else {
-    const hz = Object.entries(ix.by_hazard).filter(([, n]) => n)
-      .sort((a, b) => b[1] - a[1])
-      .map(([h, n]) => `<span class="tag" style="color:${HAZARD_COLORS[h]}">${hazardName(h)} ${n}</span>`).join(" ");
-    const w = ix.worst;
-    card.innerHTML = `<button class="x">×</button>
-      <h3>${district}</h3>
-      <p class="big">${fmt(ix.events)} events · ${fmt(ix.deaths)} deaths</p>
-      <p class="muted">${ix.first_year}–${ix.last_year}</p>
-      <p>${hz}</p>
-      ${w ? `<p class="muted">Worst: ${hazardName(w.hazard)}, ${readableDate(w.date)} —
-        ${fmt(w.deaths)} dead <a href="event.html?id=${encodeURIComponent(w.id)}&d=${slug}">details</a></p>` : ""}
-      <a class="cta" href="district.html?d=${encodeURIComponent(slug)}">Open full district page →</a>`;
-  }
-  card.hidden = false;
-  if (typeof collapsePanel === "function") collapsePanel();
-  card.querySelector(".x").onclick = () => (card.hidden = true);
+/* year + hazard filter as a URL suffix, so a click-through stays consistent */
+function filterQuery() {
+  const p = new URLSearchParams();
+  if (state.yearMin !== state.absMin || state.yearMax !== state.absMax)
+    p.set("y", `${state.yearMin}-${state.yearMax}`);
+  if (state.hazards.size !== Object.keys(HAZARD_COLORS).length)
+    p.set("h", [...state.hazards].join(","));
+  const s = p.toString();
+  return s ? "&" + s : "";
 }
 
 /* ------------------------------------------------------------- view swap -- */

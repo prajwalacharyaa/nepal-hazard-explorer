@@ -447,3 +447,11 @@ section.planned .chip { cursor: default; font-size: 10px; background: var(--surf
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+.filter-banner {
+  margin-top: 12px; padding: 8px 12px; font-size: 12px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--hair));
+  border-radius: 8px; color: var(--ink-dim);
+}
+.filter-banner b { color: var(--ink); }
+.filter-banner a { color: var(--accent); margin-left: 6px; }

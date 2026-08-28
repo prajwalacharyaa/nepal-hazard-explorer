@@ -2,9 +2,29 @@
 const { HAZARD_COLORS, HAZARD_LABELS, paths, slugify, loadJSON, fmt,
         hazardName, readableDate, eventsToCSV, download } = window.NHM;
 
-const slug = new URLSearchParams(location.search).get("d") || "";
-let FEATURES = [], IX = null, NAME = slug;
+const qp = new URLSearchParams(location.search);
+const slug = qp.get("d") || "";
+let ALL = [], FEATURES = [], IX = null, NAME = slug;
 let sortKey = "date", sortDir = -1;
+
+// optional filter carried from the map (district.html?d=x&y=2000-2026&h=flood,landslide)
+const FILTER = (() => {
+  const f = {};
+  if (qp.has("y")) {
+    const [a, b] = qp.get("y").split("-").map(Number);
+    if (a && b) { f.yMin = Math.min(a, b); f.yMax = Math.max(a, b); }
+  }
+  if (qp.has("h")) f.haz = new Set(qp.get("h").split(",").filter(Boolean));
+  return f;
+})();
+function applyFilter(list) {
+  return list.filter((f) => {
+    const p = f.properties;
+    if (FILTER.yMin && (p.year < FILTER.yMin || p.year > FILTER.yMax)) return false;
+    if (FILTER.haz && !FILTER.haz.has(p.hazard)) return false;
+    return true;
+  });
+}
 
 init();
 
@@ -18,18 +38,36 @@ async function init() {
     loadJSON(paths.districtEvents(slug)),
   ]);
   if (ix.status === "fulfilled") IX = ix.value[NAME] || null;
-  if (fc.status === "fulfilled") { FEATURES = fc.value.features; NAME = fc.value.district || NAME; }
+  if (fc.status === "fulfilled") { ALL = fc.value.features; NAME = fc.value.district || NAME; }
+  FEATURES = (FILTER.yMin || FILTER.haz) ? applyFilter(ALL) : ALL;
 
   document.getElementById("d-name").textContent = NAME;
   document.title = `${NAME} — hazard history — Nepal`;
-  if (!FEATURES.length) {
+  if (!ALL.length) {
     document.getElementById("d-sub").textContent = "No recorded events in this dataset.";
     return;
   }
   const yrs = FEATURES.map((f) => f.properties.year).filter(Boolean);
+  const span = yrs.length ? `${Math.min(...yrs)}–${Math.max(...yrs)}` : "—";
   document.getElementById("d-sub").textContent =
-    `${fmt(FEATURES.length)} recorded events, ${Math.min(...yrs)}–${Math.max(...yrs)}`;
+    `${fmt(FEATURES.length)} recorded events, ${span}`;
 
+  if (FILTER.yMin || FILTER.haz) {
+    const bits = [];
+    if (FILTER.yMin) bits.push(`${FILTER.yMin}–${FILTER.yMax}`);
+    if (FILTER.haz) bits.push([...FILTER.haz].map(hazardName).join(", "));
+    const b = document.createElement("div");
+    b.className = "filter-banner";
+    b.innerHTML = `Filtered from the map: <b>${bits.join(" · ")}</b> ` +
+      `<a href="district.html?d=${encodeURIComponent(slug)}">show all ${fmt(ALL.length)} →</a>`;
+    document.querySelector(".doc-head").appendChild(b);
+  }
+
+  if (!FEATURES.length) {
+    document.getElementById("answers").innerHTML =
+      "<p class='muted'>No events match the filter carried from the map.</p>";
+    return;
+  }
   renderAnswers();
   renderMiniMap();
   renderCharts();
@@ -214,10 +252,20 @@ function renderTable() {
 }
 
 let pSortKey = "events", pSortDir = -1;
-async function renderPalikas() {
-  let idx;
-  try { idx = await loadJSON(paths.palikaIndex); } catch (e) { return; }
-  const rows = Object.values(idx).filter((p) => (p.district || "") === NAME);
+function renderPalikas() {
+  // compute from the (possibly filtered) feature set so it stays consistent
+  const byP = new Map();
+  for (const f of FEATURES) {
+    const name = f.properties.palika;
+    if (!name) continue;
+    const r = byP.get(name) || { palika: name, events: 0, deaths: 0, last_year: 0, worst: null };
+    r.events++;
+    r.deaths += f.properties.deaths || 0;
+    r.last_year = Math.max(r.last_year, f.properties.year || 0);
+    if (!r.worst || (f.properties.severity_score || 0) > (r.worst.severity_score || 0)) r.worst = f.properties;
+    byP.set(name, r);
+  }
+  const rows = [...byP.values()];
   if (!rows.length) return;
   document.getElementById("palika-section").hidden = false;
   const tb = document.querySelector("#p-table tbody");

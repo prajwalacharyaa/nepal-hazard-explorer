@@ -385,10 +385,12 @@ def build_calendar(features):
 
 
 # ---------------------------------------------------------------- trimming ----
-# MAP copy (events.geojson) — only what the map layers + popups need.
+# MAP copy (events.geojson) — what the map layers + popups + on-the-fly area
+# cards need. palika_pcode lets the area card recompute stats for the current
+# year/hazard filter instead of showing the static all-time index.
 _MAP_KEEP = ("id", "source", "date", "date_precision", "year", "month", "hazard",
              "district", "geo_precision", "severity_score", "severity_class", "title")
-_MAP_OPT = ("deaths", "missing")
+_MAP_OPT = ("deaths", "missing", "palika_pcode", "palika")
 # FULL copy (events_by_district/*.json) — everything a research download / the
 # event permalink page needs.
 _FULL_KEEP = _MAP_KEEP + ("source_url",)
