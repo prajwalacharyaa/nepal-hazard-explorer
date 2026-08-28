@@ -371,7 +371,29 @@ def main():
     gdf = choropleth_geometry()
     build_districts(features, gdf, load_pop())   # uses full props, before trim
     build_calendar(features)
+    write_meta(features)
     write_events_split(features)                 # trims props in place, writes files
+
+
+def write_meta(features):
+    import collections
+    from datetime import datetime, timezone
+    yrs = [f["properties"]["year"] for f in features if f["properties"].get("year")]
+    dates = [f["properties"]["date"] for f in features if f["properties"].get("date")]
+    src = collections.Counter()
+    for f in features:
+        for s in str(f["properties"].get("source", "")).split("+"):
+            src[s] += 1
+    meta = {
+        "built": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "n_events": len(features),
+        "year_min": min(yrs) if yrs else None,
+        "year_max": max(yrs) if yrs else None,
+        "latest_event": max(dates) if dates else None,
+        "by_source": dict(src.most_common()),
+    }
+    (PROCESSED / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    print(f"  meta.json: {meta['n_events']} events, latest {meta['latest_event']}")
 
 
 if __name__ == "__main__":

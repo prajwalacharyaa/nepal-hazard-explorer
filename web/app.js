@@ -341,6 +341,7 @@ function updateStats() {
 }
 
 loadAll();
+window.NHM.stampMeta("#meta-stamp");
 map.on("click", "heat-points", (e) => {
   const p = e.features[0].properties;
   new maplibregl.Popup().setLngLat(e.lngLat).setHTML(

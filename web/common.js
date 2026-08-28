@@ -23,7 +23,22 @@
     calendar: `${DATA}/calendar.json`,
     manifest: `${DATA}/events_by_district_manifest.json`,
     districtEvents: (slug) => `${DATA}/events_by_district/${slug}.json`,
+    meta: `${DATA}/meta.json`,
+    outlook: `${DATA}/outlook.json`,
+    susceptibility: `${DATA}/susceptibility.json`,
   };
+
+  // fetch meta.json and drop a one-line freshness stamp into `sel`
+  async function stampMeta(sel) {
+    const el = typeof sel === "string" ? document.querySelector(sel) : sel;
+    if (!el) return;
+    try {
+      const m = await (await fetch(`${DATA}/meta.json`)).json();
+      el.textContent =
+        `Data build ${m.built} · ${Number(m.n_events).toLocaleString()} events ` +
+        `${m.year_min}–${m.year_max} · latest recorded ${m.latest_event}`;
+    } catch (e) { /* leave blank */ }
+  }
 
   const slugify = (s) =>
     String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -81,6 +96,6 @@
 
   window.NHM = {
     DATA, HAZARD_COLORS, HAZARD_LABELS, SEV_COLORS, paths, slugify,
-    loadJSON, fmt, hazardName, readableDate, eventsToCSV, download,
+    loadJSON, fmt, hazardName, readableDate, eventsToCSV, download, stampMeta,
   };
 })();

@@ -70,5 +70,17 @@ python -m http.server 8000
 # open http://localhost:8000/web/
 ```
 
-For GitHub Pages: push the repo, enable Pages on the root, visit `/web/`
-(or move `web/` contents to root and point the data paths at `data/`).
+### Deploy to GitHub Pages
+
+1. Push the repo to GitHub.
+2. Repo **Settings → Pages → Build and deployment → Source: Deploy from a
+   branch**, branch `main`, folder `/ (root)`.
+3. Wait for the build, then open `https://<user>.github.io/<repo>/` — the root
+   `index.html` redirects to `web/`, which loads data from `data/processed/`.
+
+`.nojekyll` is committed so the static files are served as-is.
+`data/raw/` (raw downloads, ~200 MB) is git-ignored and not deployed;
+`data/processed/` (~10 MB, the site's data) is committed.
+
+The footer of every page shows the data build date, event count, span and the
+most recent recorded event (`data/processed/meta.json`).

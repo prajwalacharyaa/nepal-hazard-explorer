@@ -36,9 +36,11 @@ async function init() {
   renderTable();
   wireDownloads();
   document.getElementById("d-src").innerHTML =
-    "Sources: Nepal DRR/BIPAD, DesInventar Sentinel. Older records are placed at " +
-    "village or district centroids — treat point positions as approximate. " +
-    "Event counts rise sharply after ~2011 because reporting improved.";
+    "Sources: Nepal DRR/BIPAD, DesInventar Sentinel, curated major events. Older " +
+    "records are placed at village or district centroids — treat point positions " +
+    "as approximate. Event counts rise sharply after ~2011 because reporting improved.";
+  NHM.stampMeta(document.getElementById("d-src").insertAdjacentElement(
+    "beforebegin", Object.assign(document.createElement("p"), { className: "src" })));
 }
 
 /* -------- "has my area been hit?" answer cards -------- */
