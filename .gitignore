@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Keep raw downloads out of git by default (large / re-fetchable).
+# Comment the next line if you want to commit a frozen snapshot.
+data/raw/*
+!data/raw/.gitkeep
+
+# Processed outputs ARE committed (GitHub Pages serves them):
+!data/processed/

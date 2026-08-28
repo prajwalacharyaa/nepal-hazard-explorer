@@ -1,0 +1,5 @@
+pandas>=2.2
+geopandas>=1.0
+shapely>=2.0
+requests>=2.32
+python-dateutil>=2.9

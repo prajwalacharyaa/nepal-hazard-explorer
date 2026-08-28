@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nepal Water &amp; Slope Hazard Heatmap</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside id="panel">
+    <h1>Nepal Water &amp; Slope Hazards</h1>
+    <p class="sub">Landslides, floods, flash floods, GLOFs, debris flows, avalanches.</p>
+
+    <div class="group">
+      <label>View</label>
+      <div id="view-tabs" class="tabs">
+        <button data-view="heatmap" class="active">Density</button>
+        <button data-view="choropleth">Districts</button>
+        <button data-view="hexbin">Hexbin&nbsp;+&nbsp;time</button>
+        <button data-view="calendar">Calendar</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <label>Hazard type</label>
+      <div id="hazard-filter" class="chips"><!-- filled by JS --></div>
+    </div>
+
+    <div class="group" id="year-group">
+      <label>Year range: <span id="year-label"></span></label>
+      <input type="range" id="year-min" />
+      <input type="range" id="year-max" />
+    </div>
+
+    <div class="group" id="metric-group" hidden>
+      <label>District metric</label>
+      <select id="metric">
+        <option value="events">Event count</option>
+        <option value="deaths">Deaths</option>
+        <option value="deaths_per_100k">Deaths per 100k</option>
+        <option value="severity_score">Severity score</option>
+      </select>
+    </div>
+
+    <div id="legend" class="group"></div>
+    <div id="stats" class="group"></div>
+    <p class="src">Sources: Nepal DRR/BIPAD, NASA Global Landslide Catalog, DesInventar Sentinel. Not authoritative.</p>
+  </aside>
+
+  <div id="calendar-panel" hidden></div>
+  <div id="timeline" hidden>
+    <button id="play">▶</button>
+    <input type="range" id="time-slider" />
+    <span id="time-label"></span>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/deck.gl@9.0.38/dist.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
