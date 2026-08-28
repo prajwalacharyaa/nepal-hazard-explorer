@@ -144,3 +144,29 @@ body.doc { height: auto; background: var(--bg); }
 .prevnext a.disabled { color: var(--border); pointer-events: none; }
 
 @media (max-width: 760px) { .split { grid-template-columns: 1fr; } #area-card { left: 12px; top: auto; bottom: 12px; } }
+
+/* ---------- experimental page ---------- */
+.warn-banner {
+  background: #3a2416; border: 1px solid #7a4a2a; color: #ffd9b0;
+  padding: 12px 24px; font-size: 12.5px; line-height: 1.55;
+}
+.warn-banner strong { color: #ffb27a; }
+.sub-tabs { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; font-size: 12px; }
+.sub-tabs a { color: var(--ink); text-decoration: none; border-bottom: 2px solid transparent; padding-bottom: 3px; }
+.sub-tabs a.active { border-color: var(--accent); }
+.group-inline { display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0 4px; }
+.group-inline label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.group-inline select {
+  display: block; margin-top: 4px; min-width: 180px; padding: 6px;
+  background: #222831; color: var(--ink); border: 1px solid var(--border); border-radius: 6px;
+}
+.verdict {
+  background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: 6px; padding: 12px 14px; font-size: 13.5px; line-height: 1.6;
+}
+section.planned { opacity: .7; border-top: 1px dashed var(--border); padding-top: 14px; }
+section.planned .chip {
+  font-size: 10px; background: #222831; border: 1px solid var(--border);
+  border-radius: 999px; padding: 1px 7px; color: var(--muted); vertical-align: middle;
+}
+#trend-box p { margin: 4px 0; }

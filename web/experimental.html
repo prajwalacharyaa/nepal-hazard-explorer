@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Experimental hazard outlook — Nepal</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="doc">
+  <header class="doc-head">
+    <a href="index.html" class="back">← Map</a>
+    <h1>Experimental / research layers</h1>
+    <p class="sub">Modelled hazard context — not operational warnings.</p>
+  </header>
+
+  <div class="warn-banner">
+    <strong>Read this first.</strong> Nothing on this page predicts a specific
+    event, date, or location. These are statistical and published-model summaries
+    provided for research and situational awareness only. They are not a warning
+    system. For official alerts use Nepal's DHM and NDRRMA. Figures carry large
+    uncertainty and known reporting bias.
+  </div>
+
+  <main class="doc-body">
+    <nav class="sub-tabs">
+      <a href="#outlook" class="active">D · Seasonal outlook</a>
+      <a href="#susceptibility" class="muted">A · Susceptibility (planned)</a>
+      <a href="#nowcast" class="muted">C · Daily nowcast (planned)</a>
+      <a href="#glof" class="muted">B · GLOF scenarios (planned)</a>
+    </nav>
+
+    <section id="outlook">
+      <h2>D · Seasonal statistical outlook</h2>
+      <p class="cap" id="method"></p>
+
+      <div class="group-inline">
+        <label>District
+          <select id="d-pick"></select>
+        </label>
+        <label>Month of interest
+          <select id="m-pick"></select>
+        </label>
+      </div>
+
+      <p id="verdict" class="verdict"></p>
+
+      <div class="split">
+        <div>
+          <h3>Recorded events per month (2011–2025 average)</h3>
+          <div id="month-chart"></div>
+          <p class="cap">Bar = mean recorded events that month. Whisker = 5th–95th
+            percentile of the annual count under a Poisson model. Not a probability
+            that an event occurs.</p>
+        </div>
+        <div>
+          <h3>Annual trend</h3>
+          <div id="trend-box"></div>
+          <h3>Historical shape (1971–2010)</h3>
+          <div id="hist-chart"></div>
+          <p class="cap">Older era, under-reported — shown for month-of-year shape only,
+            not counts.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="susceptibility" class="planned">
+      <h2>A · Landslide &amp; flood susceptibility <span class="chip">planned</span></h2>
+      <p class="muted">Static proneness from NASA Global Landslide Susceptibility and
+        JRC Global Flood Hazard, sampled per ward/district. Not yet built.</p>
+    </section>
+    <section id="nowcast" class="planned">
+      <h2>C · Daily landslide nowcast <span class="chip">planned</span></h2>
+      <p class="muted">NASA LHASA satellite-rainfall hazard, refreshed daily by a
+        scheduled job. Not yet built.</p>
+    </section>
+    <section id="glof" class="planned">
+      <h2>B · GLOF what-if scenarios <span class="chip">planned</span></h2>
+      <p class="muted">Dangerous glacial lakes plus modelled downstream inundation
+        path. Not yet built.</p>
+    </section>
+
+    <p class="src" id="src"></p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+  <script src="common.js"></script>
+  <script src="experimental.js"></script>
+</body>
+</html>

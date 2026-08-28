@@ -11,6 +11,13 @@ catastrophic events.
 3. **Year–month calendar heatmap** — seasonality (monsoon signal) and long-term trend.
 4. **Time-animated hexbin** — spatial clustering played through the years.
 
+Plus **find-your-area** tools (geolocation / district picker / map click), per-district
+pages (`district.html?d=<slug>`), per-event permalinks (`event.html?id=<id>`), and an
+**Experimental / research** section (`experimental.html`) — currently the seasonal
+statistical outlook (Approach D); susceptibility (A), daily nowcast (C) and GLOF
+what-if scenarios (B) are planned. The experimental layers are descriptive/modelled
+context, **not** an operational warning system.
+
 ## Stack
 
 - **Pipeline:** Python (pandas, geopandas) — produces static GeoJSON/JSON.
@@ -48,7 +55,9 @@ python fetch_desinventar.py  # DesInventar Sentinel  -> desinventar_npl.xml + sh
 python fetch_nasa_glc.py     # NASA GLC (optional; exits clean if endpoint down)
 python clean_merge.py        # -> events.geojson (normalise, scope-filter, light dedup)
 python aggregate.py          # -> events.geojson (coords+dedup), districts.geojson,
-                             #    district_index.json, calendar.json
+                             #    district_index.json, calendar.json, events_by_district/
+python outlook.py            # -> outlook.json  (seasonal climatology for the
+                             #    Experimental section — descriptive, not a forecast)
 
 # current output: ~13,000 events, 1971-2026, from BIPAD + DesInventar.
 # NASA GLC and HDX boundaries/population are optional add-ons (see DATA_SOURCES.md).
