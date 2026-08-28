@@ -45,7 +45,8 @@ async function loadAll() {
   buildHazardChips();
   initYearSliders();
   buildDistrictPicker();
-  setView("heatmap");
+  if (map.loaded()) setView("heatmap");
+  else map.once("load", () => setView("heatmap"));
 }
 
 function filteredEvents() {
@@ -339,7 +340,7 @@ function updateStats() {
     `<br><span class="muted">${state.yearMin}–${state.yearMax}</span>`;
 }
 
-map.on("load", loadAll);
+loadAll();
 map.on("click", "heat-points", (e) => {
   const p = e.features[0].properties;
   new maplibregl.Popup().setLngLat(e.lngLat).setHTML(
