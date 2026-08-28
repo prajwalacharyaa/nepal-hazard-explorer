@@ -141,11 +141,24 @@ function renderCharts() {
   const w = 420, h = 130, pad = 24;
   const x = d3.scaleBand().domain(years).range([pad, w - 4]).padding(0.15);
   const y = d3.scaleLinear().domain([0, d3.max([...byYear.values()]) || 1]).range([h - pad, 4]);
-  const svg = d3.create("svg").attr("width", w).attr("height", h).attr("font-size", 9);
-  svg.append("g").selectAll("rect").data(years).join("rect")
+  const ERA = 2011;
+  const svg = d3.create("svg").attr("width", w).attr("height", h).attr("font-size", 9)
+    .attr("role", "img").attr("aria-label", "Recorded events per year");
+  // reporting-era band: dim the under-reported pre-2011 span
+  if (years[0] < ERA) {
+    svg.append("rect")
+      .attr("x", x(years[0])).attr("y", 4)
+      .attr("width", Math.max(0, (x(ERA - 1) ?? x(years.at(-1))) + x.bandwidth() - x(years[0])))
+      .attr("height", h - pad - 4)
+      .attr("fill", "#ffffff").attr("opacity", 0.04);
+    svg.append("text").attr("x", x(years[0]) + 3).attr("y", 12)
+      .attr("fill", "#6f7883").attr("font-size", 8).text("sparser reporting");
+  }
+  svg.append("g").selectAll("rect.bar").data(years).join("rect").attr("class", "bar")
     .attr("x", (d) => x(d)).attr("y", (d) => y(byYear.get(d) || 0))
     .attr("width", x.bandwidth()).attr("height", (d) => h - pad - y(byYear.get(d) || 0))
-    .attr("fill", "#4e79a7").append("title").text((d) => `${d}: ${byYear.get(d) || 0}`);
+    .attr("fill", (d) => (d < ERA ? "#3a5f7d" : "#4e79a7"))
+    .append("title").text((d) => `${d}: ${byYear.get(d) || 0}`);
   svg.append("g").attr("transform", `translate(0,${h - pad})`).attr("color", "#9aa3ad")
     .call(d3.axisBottom(x).tickValues(years.filter((d) => d % 10 === 0)).tickSizeOuter(0));
   svg.append("g").attr("transform", `translate(${pad},0)`).attr("color", "#9aa3ad")

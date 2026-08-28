@@ -6,7 +6,7 @@ const state = {
   view: "heatmap",
   hazards: new Set(Object.keys(HAZARD_COLORS)),
   yearMin: 1971, yearMax: new Date().getFullYear(),
-  metric: "events", preciseOnly: false,
+  metric: "events", preciseOnly: false, calMetric: "count",
   data: { events: null, districts: null, calendar: null, index: null, palikaIndex: null },
   anim: null, hexYear: null, palikaLoaded: false,
 };
@@ -41,13 +41,47 @@ async function loadAll() {
     return;
   }
   const yrs = state.data.events.features.map((f) => f.properties.year).filter(Boolean);
-  state.yearMin = Math.min(...yrs);
-  state.yearMax = Math.max(...yrs);
+  state.absMin = Math.min(...yrs);
+  state.absMax = Math.max(...yrs);
+  state.yearMin = state.absMin;
+  state.yearMax = state.absMax;
+  const initialView = applyHash();
   buildHazardChips();
   initYearSliders();
   buildDistrictPicker();
-  if (map.loaded()) setView("heatmap");
-  else map.once("load", () => setView("heatmap"));
+  document.getElementById("precise-only").checked = state.preciseOnly;
+  document.getElementById("metric").value = state.metric;
+  const go = () => setView(initialView || "heatmap");
+  map.loaded() ? go() : map.once("load", go);
+}
+
+/* ---- shareable URL state (location.hash) ---- */
+function applyHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (p.has("h")) {
+    const set = new Set(p.get("h").split(",").filter((x) => x in HAZARD_COLORS));
+    if (set.size) state.hazards = set;
+  }
+  if (p.has("y")) {
+    const [a, b] = p.get("y").split("-").map(Number);
+    if (a && b) { state.yearMin = Math.max(state.absMin, Math.min(a, b)); state.yearMax = Math.min(state.absMax, Math.max(a, b)); }
+  }
+  if (p.get("p") === "1") state.preciseOnly = true;
+  if (p.has("m")) state.metric = p.get("m");
+  if (p.has("cm")) state.calMetric = p.get("cm");
+  return p.get("v");
+}
+function syncHash() {
+  const all = Object.keys(HAZARD_COLORS).length;
+  const p = new URLSearchParams();
+  if (state.view !== "heatmap") p.set("v", state.view);
+  if (state.hazards.size !== all) p.set("h", [...state.hazards].join(","));
+  if (state.yearMin !== state.absMin || state.yearMax !== state.absMax) p.set("y", `${state.yearMin}-${state.yearMax}`);
+  if (state.preciseOnly) p.set("p", "1");
+  if (state.metric !== "events") p.set("m", state.metric);
+  if (state.calMetric !== "count") p.set("cm", state.calMetric);
+  const q = p.toString();
+  history.replaceState(null, "", q ? "#" + q : location.pathname + location.search);
 }
 
 function filteredEvents() {
@@ -156,38 +190,58 @@ function showHexbin() {
 function clearHexbin() { if (deckOverlay) deckOverlay.setProps({ layers: [] }); }
 
 /* -------------------------------------------------------------- calendar -- */
+const REPORTING_ERA = 2011;   // BIPAD coverage begins; pre-this is sparser
+
 function drawCalendar() {
   const el = document.getElementById("calendar-panel");
-  el.innerHTML = "<h2>Events by year &amp; month</h2>" +
-    "<p class='cap'>Cell = recorded events. Monsoon (Jun–Sep) carries most of the load. " +
-    "Recent years have far more records — reporting improved, not necessarily hazard.</p>";
+  const metricName = state.calMetric === "score" ? "summed severity score" : "recorded events";
+  el.innerHTML =
+    "<h2>By year &amp; month</h2>" +
+    `<div class="cal-toggle" role="group" aria-label="Calendar metric">
+       <button data-cm="count" class="${state.calMetric !== "score" ? "active" : ""}">Events</button>
+       <button data-cm="score" class="${state.calMetric === "score" ? "active" : ""}">Severity</button>
+     </div>` +
+    `<p class='cap'>Cell = ${metricName} that month. Monsoon (Jun–Sep) carries most of the load. ` +
+    `Years before ${REPORTING_ERA} (dimmed) are under-reported — the jump is mostly coverage, not hazard.</p>`;
+  el.querySelectorAll(".cal-toggle button").forEach((b) => {
+    b.onclick = () => { state.calMetric = b.dataset.cm; drawCalendar(); syncHash(); };
+  });
+
   const cal = state.data.calendar;
   if (!cal) { el.innerHTML += "<p>No calendar.json.</p>"; return; }
+  const useScore = state.calMetric === "score";
   const rows = [];
   for (const [k, v] of Object.entries(cal)) {
     const [y, mo] = k.split("-").map(Number);
-    const c = v.by_hazard
+    let val;
+    if (useScore) val = v.score || 0;
+    else val = v.by_hazard
       ? Object.entries(v.by_hazard).filter(([h]) => state.hazards.has(h)).reduce((s, [, n]) => s + n, 0)
       : v.count;
-    rows.push({ y, mo, count: c });
+    rows.push({ y, mo, val });
   }
   const years = [...new Set(rows.map((r) => r.y))].sort((a, b) => a - b);
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const cw = 34, ch = 16, padL = 46, padT = 22;
   const w = padL + months.length * cw + 10, h = padT + years.length * ch + 10;
-  const max = d3.max(rows, (r) => r.count) || 1;
+  const max = d3.max(rows, (r) => r.val) || 1;
   const color = d3.scaleSequential(d3.interpolateYlOrRd).domain([0, Math.sqrt(max)]);
-  const svg = d3.create("svg").attr("width", w).attr("height", h).attr("font-size", 10);
+  const svg = d3.create("svg").attr("width", w).attr("height", h)
+    .attr("font-size", 10).attr("role", "img")
+    .attr("aria-label", `Calendar heatmap of ${metricName} by year and month, ${years[0]}–${years.at(-1)}`);
   svg.append("g").attr("fill", "#9aa3ad").selectAll("text").data(months).join("text")
     .attr("x", (_, i) => padL + i * cw + cw / 2).attr("y", 14).attr("text-anchor", "middle").text((d) => d);
-  svg.append("g").attr("fill", "#9aa3ad").selectAll("text").data(years).join("text")
-    .attr("x", padL - 6).attr("y", (_, i) => padT + i * ch + ch / 2 + 3).attr("text-anchor", "end").text((d) => d);
+  svg.append("g").selectAll("text").data(years).join("text")
+    .attr("x", padL - 6).attr("y", (_, i) => padT + i * ch + ch / 2 + 3).attr("text-anchor", "end")
+    .attr("fill", (d) => (d < REPORTING_ERA ? "#5b6472" : "#9aa3ad")).text((d) => d);
   const yi = new Map(years.map((y, i) => [y, i]));
   svg.append("g").selectAll("rect").data(rows).join("rect")
     .attr("x", (d) => padL + (d.mo - 1) * cw).attr("y", (d) => padT + yi.get(d.y) * ch)
     .attr("width", cw - 1.5).attr("height", ch - 1.5).attr("rx", 2)
-    .attr("fill", (d) => (d.count ? color(Math.sqrt(d.count)) : "#20242b"))
-    .append("title").text((d) => `${d.y}-${String(d.mo).padStart(2, "0")}: ${d.count} events`);
+    .attr("opacity", (d) => (d.y < REPORTING_ERA ? 0.55 : 1))
+    .attr("fill", (d) => (d.val ? color(Math.sqrt(d.val)) : "#20242b"))
+    .append("title").text((d) =>
+      `${d.y}-${String(d.mo).padStart(2, "0")}: ${useScore ? Math.round(d.val) + " severity" : d.val + " events"}`);
   el.append(svg.node());
 }
 
@@ -291,6 +345,7 @@ function setView(v) {
   else if (v === "hexbin") { initTimeline(); showHexbin(); hazardLegend(); }
   else if (v === "calendar") { drawCalendar(); document.getElementById("legend").innerHTML = ""; }
   updateStats();
+  syncHash();
 }
 
 function hazardLegend() {
@@ -307,6 +362,7 @@ function refresh() {
   else if (state.view === "hexbin") showHexbin();
   else if (state.view === "calendar") drawCalendar();
   updateStats();
+  syncHash();
 }
 
 /* -------------------------------------------------------------- controls -- */
@@ -331,7 +387,7 @@ function buildHazardChips() {
 }
 function initYearSliders() {
   const mn = document.getElementById("year-min"), mx = document.getElementById("year-max");
-  for (const s of [mn, mx]) { s.min = state.yearMin; s.max = state.yearMax; }
+  for (const s of [mn, mx]) { s.min = state.absMin; s.max = state.absMax; }
   mn.value = state.yearMin; mx.value = state.yearMax;
   const sync = () => {
     let a = +mn.value, b = +mx.value; if (a > b) [a, b] = [b, a];
@@ -373,7 +429,7 @@ function stopAnim() {
 }
 
 document.querySelectorAll("#view-tabs button").forEach((b) => (b.onclick = () => setView(b.dataset.view)));
-document.getElementById("metric").onchange = (e) => { state.metric = e.target.value; paintChoropleth(); };
+document.getElementById("metric").onchange = (e) => { state.metric = e.target.value; paintChoropleth(); syncHash(); };
 document.getElementById("precise-only").onchange = (e) => { state.preciseOnly = e.target.checked; refresh(); };
 
 document.getElementById("near-me").onclick = () => {
@@ -413,6 +469,14 @@ function districtAt(pt) {
   }
   return null;
 }
+
+document.getElementById("copy-link").onclick = async () => {
+  syncHash();
+  const btn = document.getElementById("copy-link");
+  try { await navigator.clipboard.writeText(location.href); btn.textContent = "✓ Link copied"; }
+  catch (e) { btn.textContent = location.href; }
+  setTimeout(() => (btn.textContent = "🔗 Copy link to this view"), 2500);
+};
 
 document.getElementById("download-view").onclick = () => {
   const f = filteredEvents();

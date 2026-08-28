@@ -18,7 +18,7 @@
     <section id="answers" class="cards"></section>
 
     <section class="split">
-      <div id="d-map" class="mini-map"></div>
+      <div id="d-map" class="mini-map" role="img" aria-label="Locator map of this district"></div>
       <div id="d-charts"></div>
     </section>
 
@@ -30,11 +30,11 @@
         finest geography available.</p>
       <div class="table-wrap"><table id="p-table">
         <thead><tr>
-          <th data-k="palika">Municipality</th>
-          <th data-k="events">Events</th>
-          <th data-k="deaths">Deaths</th>
-          <th data-k="last_year">Last</th>
-          <th>Worst recorded</th>
+          <th scope="col" data-k="palika">Municipality</th>
+          <th scope="col" data-k="events">Events</th>
+          <th scope="col" data-k="deaths">Deaths</th>
+          <th scope="col" data-k="last_year">Last</th>
+          <th scope="col">Worst recorded</th>
         </tr></thead>
         <tbody></tbody>
       </table></div>
@@ -50,11 +50,11 @@
       </div>
       <div class="table-wrap"><table id="d-table">
         <thead><tr>
-          <th data-k="date">Date</th><th data-k="hazard">Hazard</th>
-          <th data-k="deaths">Deaths</th><th data-k="missing">Missing</th>
-          <th data-k="houses_destroyed">Houses lost</th>
-          <th data-k="severity_score">Severity</th>
-          <th>Place / source</th>
+          <th scope="col" data-k="date">Date</th><th scope="col" data-k="hazard">Hazard</th>
+          <th scope="col" data-k="deaths">Deaths</th><th scope="col" data-k="missing">Missing</th>
+          <th scope="col" data-k="houses_destroyed">Houses lost</th>
+          <th scope="col" data-k="severity_score">Severity</th>
+          <th scope="col">Place / source</th>
         </tr></thead>
         <tbody></tbody>
       </table></div>
