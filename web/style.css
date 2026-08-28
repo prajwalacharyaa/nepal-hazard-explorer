@@ -1182,3 +1182,86 @@ svg.chart { display: block; width: 100%; height: auto; }
   width: 16px; height: 16px; border-radius: 999px; background: var(--surface);
   border: 2px solid var(--accent); box-shadow: var(--shadow-sm); cursor: grab;
 }
+
+/* ============================================================================
+   IMPACT VIEW  (impact.html)
+   ========================================================================== */
+body.impact { height: 100%; overflow: hidden; }
+#imap { position: fixed; inset: 0; background: #eef2f6; }
+
+#ipanel {
+  position: fixed;
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+@media (min-width: 900px) {
+  #ipanel { top: 16px; right: 16px; bottom: 16px; width: 390px; border-radius: var(--r-card); }
+}
+@media (max-width: 899px) {
+  #ipanel {
+    left: 0; right: 0; bottom: 0;
+    max-height: 62dvh;
+    border-width: 1px 0 0;
+    border-radius: 18px 18px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+.ipanel-head { padding: 16px 20px 10px; border-bottom: 1px solid var(--hair); flex: none; }
+.ipanel-head h1 { font-size: 19px; margin: 8px 0 3px; }
+.ipanel-head .back { font-size: 12.5px; color: var(--ink-faint); font-weight: 500; }
+.ipanel-head .sub { font-size: 13px; }
+.ipanel-body {
+  padding: 16px 20px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.ipanel-body .field-label { margin-bottom: 2px; }
+
+/* severity badge row */
+#i-badge { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sev {
+  font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 4px 10px; border-radius: 999px; color: #fff;
+}
+.sev-minor { background: #94a3b8; }
+.sev-small { background: #2c6ca0; }
+.sev-moderate { background: #d97706; }
+.sev-major { background: #ea580c; }
+.sev-catastrophic { background: #b91c1c; }
+.prec { font-size: 11.5px; color: var(--ink-faint); }
+
+/* recorded-impact tiles */
+.loss-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.loss {
+  background: var(--surface-2); border: 1px solid var(--hair);
+  border-radius: 10px; padding: 10px 12px;
+}
+.loss b {
+  display: block; font-size: 19px; font-weight: 680; letter-spacing: -0.02em;
+  color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.loss span { font-size: 11px; color: var(--ink-faint); }
+
+.corridor-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.corridor-actions .btn { flex: 1 1 auto; min-height: 40px; justify-content: center; }
+#i-corridor-note b { color: var(--ink); }
+#i-corridor-note .ref { color: var(--ink-ghost); font-size: 10.5px; }
+#ipanel .table-wrap { max-height: 220px; overflow-y: auto; }
+#ipanel table { font-size: 12.5px; }
+#ipanel th, #ipanel td { padding: 7px 10px; }
+
+/* "Full view" alongside the district link in the area card */
+#area-card .cta-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+#area-card .cta-row .cta { margin-top: 0; flex: 1 1 auto; justify-content: center; }
+#area-card .cta.ghost {
+  background: var(--surface); color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--surface));
+}
+#area-card .cta.ghost:hover { background: var(--accent-soft); }

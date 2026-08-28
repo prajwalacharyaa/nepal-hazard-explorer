@@ -1,0 +1,73 @@
+{
+  "type": "FeatureCollection",
+  "note": "Hand-authored OBSERVED impact paths for major documented events. Each is digitised from published reporting and imagery and is approximate at the scale of a few hundred metres; it is not a survey product. Events without an entry here fall back to a modelled river trace in corridors.py.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "event_id": "manual-2026-08-26-langtang",
+        "name": "Langtang ice-rock avalanche → Bhote Koshi / Trishuli debris flow",
+        "note": "Approximate observed path of the 26 August 2026 cascade: several million m³ of ice and rock detached near 5,000 m in the Langtang area, fell ~1,900 m, briefly dammed the Bhote Koshi, then breached — sending a debris flow and flash flood roughly 100 km down the Bhote Koshi and Trishuli. Cross-border impact was reported at Gyirong (China). Digitised from USGS and UN OCHA reporting; approximate.",
+        "reference": "USGS 2026 Nepal Debris Avalanche and Flash Flood; UN OCHA situation reports, Aug 2026"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [85.6210, 28.2620],
+          [85.6005, 28.2455],
+          [85.5820, 28.2360],
+          [85.5640, 28.2270],
+          [85.5480, 28.2090],
+          [85.5395, 28.1885],
+          [85.5330, 28.1650],
+          [85.5270, 28.1400],
+          [85.5185, 28.1150],
+          [85.5060, 28.0910],
+          [85.4950, 28.0640],
+          [85.4880, 28.0330],
+          [85.4820, 28.0010],
+          [85.4760, 27.9700],
+          [85.4680, 27.9410],
+          [85.4560, 27.9150],
+          [85.4400, 27.8930],
+          [85.4210, 27.8730],
+          [85.3990, 27.8560],
+          [85.3760, 27.8420],
+          [85.3510, 27.8300],
+          [85.3240, 27.8190],
+          [85.2960, 27.8080],
+          [85.2680, 27.7960],
+          [85.2400, 27.7830],
+          [85.2130, 27.7690],
+          [85.1880, 27.7530],
+          [85.1660, 27.7350],
+          [85.1470, 27.7150],
+          [85.1310, 27.6930],
+          [85.1180, 27.6700],
+          [85.1080, 27.6450],
+          [85.1000, 27.6190],
+          [85.0930, 27.5930],
+          [85.0850, 27.5680],
+          [85.0740, 27.5440],
+          [85.0600, 27.5220],
+          [85.0430, 27.5030],
+          [85.0230, 27.4870],
+          [85.0010, 27.4740],
+          [84.9770, 27.4640],
+          [84.9520, 27.4570],
+          [84.9270, 27.4520],
+          [84.9010, 27.4480],
+          [84.8750, 27.4430],
+          [84.8500, 27.4360],
+          [84.8270, 27.4260],
+          [84.8060, 27.4130],
+          [84.7880, 27.3970],
+          [84.7740, 27.3790],
+          [84.7640, 27.3590],
+          [84.7580, 27.3380],
+          [84.7560, 27.3160]
+        ]
+      }
+    }
+  ]
+}

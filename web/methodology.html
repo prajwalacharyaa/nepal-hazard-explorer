@@ -113,7 +113,31 @@
         source.</li>
     </ul>
 
-    <h2>8. Experimental layers</h2>
+    <h2>8. Impact corridors</h2>
+    <p>Each significant event (any with recorded deaths, or a moderate-or-worse
+      severity class) has an <b>impact view</b> showing a downstream corridor.
+      There are two kinds, and the page always says which you are looking at:</p>
+    <ul>
+      <li><b>Modelled</b> (dashed) — the event point is snapped to the nearest
+        reach of the <a href="https://www.hydrosheds.org/products/hydrorivers"
+        target="_blank" rel="noopener">HydroRIVERS</a> network and the route is
+        traced downstream along that network's flow topology, for a distance
+        scaled by the event's severity score (3–120&nbsp;km). This is the path
+        water and debris <i>would</i> follow. It is <b>not</b> an observed flood
+        extent, and it says nothing about how wide the impact was or how far it
+        actually reached.</li>
+      <li><b>Observed</b> (solid, with a citation) — a path hand-digitised from
+        published reporting for a major documented event, kept in
+        <code>data/raw/curated_paths.geojson</code>. Accurate only to a few
+        hundred metres, and only as good as its source.</li>
+    </ul>
+    <p>No open dataset records the true inundation footprint of Nepal's
+      historical events, which is why the modelled corridor exists at all.
+      Municipalities listed along a corridor are <b>exposure context</b> — the
+      units the path crosses — not a claim that each was affected by that event.
+      Elevation profiles are sampled from SRTM 30&nbsp;m via OpenTopoData.</p>
+
+    <h2>9. Experimental layers</h2>
     <p>The <a href="experimental.html">experimental section</a> is walled off and
       carries its own disclaimer. It contains: (D) a descriptive seasonal
       climatology from this dataset — <b>not a forecast</b>; (A) zonal summaries
@@ -122,7 +146,7 @@
       inventory paired with the historical record of its downstream river
       corridor. None of these predict a specific event.</p>
 
-    <h2>9. Getting the data</h2>
+    <h2>10. Getting the data</h2>
     <p>Everything the site loads is a static file under
       <code>data/processed/</code> — it doubles as an API:</p>
     <ul>
@@ -137,7 +161,7 @@
     <p>The map's download button exports whatever is currently filtered as CSV +
       GeoJSON. Per-district and per-event downloads are on those pages.</p>
 
-    <h2>10. Citation</h2>
+    <h2>11. Citation</h2>
     <pre class="cite">Nepal Water &amp; Slope Hazard Explorer (2026). Compiled hazard-event
 dataset for Nepal, 1971–present, from Nepal DRR/BIPAD and UNDRR DesInventar
 Sentinel, with administrative and population data from OCHA HDX.

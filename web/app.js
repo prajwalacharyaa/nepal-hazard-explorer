@@ -417,12 +417,27 @@ function renderAreaCard({ title, subtitle, slug, feats, allTime }) {
        ${!isFull && allTime ? `<p class="muted">All-time: ${fmt(allTime.events)} events, ${allTime.deaths} deaths, ${allTime.first_year}–${allTime.last_year}.</p>` : ""}`;
   }
 
+  // "Full view" opens the worst event in the current selection in its own tab,
+  // with the downstream corridor drawn
+  const fullView = worst
+    ? `<a class="cta ghost" target="_blank" rel="noopener"
+          href="impact.html?id=${encodeURIComponent(worst.id)}&d=${slug}"
+          title="Open the impact view for the most severe event here">
+         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+           <path d="M15 3h6v6M21 3l-8 8M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/>
+         </svg>Full view</a>`
+    : "";
+
   const firstOpen = card.hidden;
   card.innerHTML = `<button class="x" aria-label="Close">×</button>
     <h3>${title}</h3>
     <p class="muted">${subtitle}</p>
     ${body}
-    <a class="cta" href="district.html?d=${encodeURIComponent(slug)}${q}">Open full district page →</a>`;
+    <div class="cta-row">
+      <a class="cta" href="district.html?d=${encodeURIComponent(slug)}${q}">District page →</a>
+      ${fullView}
+    </div>`;
   card.hidden = false;
   // only steal focus / collapse the sheet when the card first appears, not on
   // every filter-driven refresh

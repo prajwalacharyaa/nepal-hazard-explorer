@@ -95,6 +95,20 @@ function render(feat, siblings) {
   const dl = document.getElementById("e-district-link");
   dl.href = `district.html?d=${encodeURIComponent(dslug)}`;
 
+  // offer the richer impact view when a corridor was traced for this event
+  fetch(`${window.NHM.DATA}/corridors_index.json`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((idx) => {
+      if (!idx || !idx[p.id]) return;
+      const a = document.createElement("a");
+      a.className = "secondary";
+      a.target = "_blank"; a.rel = "noopener";
+      a.href = `impact.html?id=${encodeURIComponent(p.id)}&d=${dslug}`;
+      a.textContent = `Impact view — ${idx[p.id].length_km} km corridor ↗`;
+      dl.insertAdjacentElement("afterend", a);
+    })
+    .catch(() => {});
+
   // prev / next within siblings, by date
   const sorted = [...siblings].sort((a, b) => (a.properties.date < b.properties.date ? -1 : 1));
   const i = sorted.findIndex((f) => f.properties.id === ID);

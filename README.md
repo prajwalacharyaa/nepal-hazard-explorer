@@ -64,6 +64,10 @@ python aggregate.py          # -> events.geojson (coords+dedup), districts.geojs
                              #    calendar.json, events_by_district/, meta.json
 python outlook.py            # -> outlook.json  (seasonal climatology for the
                              #    Experimental section — descriptive, not a forecast)
+# impact corridors (downstream trace per significant event):
+python fetch_rivers.py       # HydroRIVERS Asia -> hydrorivers_nepal.gpkg (~79 MB once)
+python corridors.py          # -> corridors/<event id>.json + corridors_index.json
+
 # experimental layers:
 python glof.py               # -> glof.json            (curated dangerous_lakes.csv, §7)
 python susceptibility.py     # -> susceptibility.json  (needs hazard rasters, §6)

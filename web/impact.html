@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="color-scheme" content="light" />
+  <title>Impact view — Nepal hazards</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="impact">
+  <div id="imap" role="region" aria-label="Map of the affected area"></div>
+
+  <aside id="ipanel" aria-label="Event detail">
+    <div class="ipanel-head">
+      <a href="index.html" class="back">← Map</a>
+      <h1 id="i-title">Loading…</h1>
+      <p class="sub" id="i-sub"></p>
+    </div>
+
+    <div class="ipanel-body">
+      <div id="i-badge"></div>
+
+      <div class="field">
+        <span class="field-label">Recorded impact</span>
+        <div id="i-losses" class="loss-grid"></div>
+      </div>
+
+      <div class="field" id="i-corridor-field" hidden>
+        <span class="field-label">Downstream corridor <b id="i-corridor-len"></b></span>
+        <p class="cap" id="i-corridor-note"></p>
+        <div class="corridor-actions">
+          <button id="i-play" class="btn" type="button">▶ Play flow</button>
+          <button id="i-fit" class="btn" type="button">Fit to corridor</button>
+        </div>
+      </div>
+
+      <div class="field" id="i-profile-field" hidden>
+        <span class="field-label">Elevation along the path</span>
+        <div id="i-profile"></div>
+        <p class="cap" id="i-profile-note"></p>
+      </div>
+
+      <div class="field" id="i-palikas-field" hidden>
+        <span class="field-label">Municipalities along the corridor</span>
+        <div class="table-wrap"><table id="i-palikas">
+          <thead><tr>
+            <th scope="col">Municipality</th><th scope="col">District</th>
+            <th scope="col" class="num">Its own record</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p class="cap">Downstream units the modelled path passes through — exposure
+          context, not a statement that each was affected by this event.</p>
+      </div>
+
+      <div class="field" id="i-nearby-field" hidden>
+        <span class="field-label">Other events on this reach <b id="i-nearby-count"></b></span>
+        <div class="table-wrap"><table id="i-nearby">
+          <thead><tr>
+            <th scope="col">Date</th><th scope="col">Hazard</th>
+            <th scope="col" class="num">Deaths</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p class="cap">Recorded within 3&nbsp;km of the traced path, any year.</p>
+      </div>
+
+      <div class="field">
+        <a id="i-event-link" class="btn" href="#">Full record &amp; citation →</a>
+        <a id="i-district-link" class="btn" href="#">District page →</a>
+      </div>
+
+      <p class="src" id="i-src"></p>
+    </div>
+  </aside>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+  <script src="common.js"></script>
+  <script src="impact.js"></script>
+</body>
+</html>
