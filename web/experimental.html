@@ -25,7 +25,7 @@
     <nav class="sub-tabs">
       <a href="#outlook" class="active">D · Seasonal outlook</a>
       <a href="#susceptibility" class="">A · Susceptibility</a>
-      <a href="#nowcast" class="muted">C · Daily nowcast (planned)</a>
+      <a href="#nowcast" class="">C · Daily nowcast</a>
       <a href="#glof" class="muted">B · GLOF scenarios (planned)</a>
     </nav>
 
@@ -84,10 +84,20 @@
         District aggregates — a "high" district still contains safe ground and vice
         versa. Use as regional context, not a site assessment.</p>
     </section>
-    <section id="nowcast" class="planned">
-      <h2>C · Daily landslide nowcast <span class="chip">planned</span></h2>
-      <p class="muted">NASA LHASA satellite-rainfall hazard, refreshed daily by a
-        scheduled job. Not yet built.</p>
+    <section id="nowcast">
+      <h2>C · Daily landslide nowcast</h2>
+      <p class="cap" id="nc-method"></p>
+      <p class="muted" id="nc-missing" hidden>
+        No nowcast yet. It is produced daily by the <code>nowcast.yml</code>
+        GitHub Action once an <code>EARTHDATA_TOKEN</code> secret is set
+        (DATA_SOURCES.md §8), or run <code>pipeline/fetch_nowcast.py</code> locally.
+      </p>
+      <div id="nc-body" hidden>
+        <p id="nc-asof" class="muted"></p>
+        <p id="nc-district" class="verdict"></p>
+        <h3>Districts flagged today</h3>
+        <div id="nc-list" class="chips"></div>
+      </div>
     </section>
     <section id="glof" class="planned">
       <h2>B · GLOF what-if scenarios <span class="chip">planned</span></h2>
@@ -95,6 +105,7 @@
         path. Not yet built.</p>
     </section>
 
+    <p class="src" id="meta-stamp"></p>
     <p class="src" id="src"></p>
   </main>
 

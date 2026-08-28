@@ -3,7 +3,7 @@ const { DATA, loadJSON, fmt } = window.NHM;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-let OUT = null, SUSC = null;
+let OUT = null, SUSC = null, NOW = null;
 
 init();
 
@@ -15,6 +15,10 @@ async function init() {
     return;
   }
   try { SUSC = await loadJSON(`${DATA}/susceptibility.json`); } catch (e) { SUSC = null; }
+  try {
+    const n = await loadJSON(`${DATA}/nowcast.json`);
+    NOW = n && !n.unavailable ? n : null;
+  } catch (e) { NOW = null; }
   document.getElementById("method").textContent = OUT.meta.method +
     `  Recent window ${OUT.meta.recent_window[0]}–${OUT.meta.recent_window[1]}.`;
 
@@ -39,6 +43,8 @@ async function init() {
     "Poisson intervals assume independent events and a stationary rate within the " +
     "window — both are only approximations. Trends are sensitive to reporting changes. " +
     "This is not a forecast and must not be used for operational decisions.";
+
+  window.NHM.stampMeta("#meta-stamp");
 
   document.querySelectorAll(".sub-tabs a").forEach((a) => {
     a.onclick = () => { document.querySelectorAll(".sub-tabs a").forEach((x) => x.classList.remove("active")); a.classList.add("active"); };
@@ -71,6 +77,45 @@ function render() {
   drawTrend(rec);
   drawHist(rec);
   renderSusceptibility(d);
+  renderNowcast(d);
+}
+
+function renderNowcast(d) {
+  const method = document.getElementById("nc-method");
+  const missing = document.getElementById("nc-missing");
+  const body = document.getElementById("nc-body");
+  if (!NOW) { missing.hidden = false; body.hidden = true; method.textContent = ""; return; }
+  missing.hidden = true; body.hidden = false;
+  method.textContent = NOW.model || "";
+  document.getElementById("nc-asof").textContent =
+    `${NOW.source} — conditions for ${NOW.as_of}`;
+
+  const rec = (NOW.districts || {})[d];
+  const dEl = document.getElementById("nc-district");
+  if (rec) {
+    const col = rec.level === "high" ? "#bd0026" : "#f28e2b";
+    dEl.innerHTML =
+      `<b>${d}</b>: <span style="color:${col}">${rec.level.toUpperCase()}</span> ` +
+      `landslide hazard nowcast for ${NOW.as_of}. ` +
+      `${rec.moderate_plus_pct}% of the district flagged moderate+` +
+      (rec.high_pct ? `, ${rec.high_pct}% high` : "") + `.`;
+  } else {
+    dEl.innerHTML = `<b>${d}</b>: not flagged in the ${NOW.as_of} nowcast.`;
+  }
+
+  const list = document.getElementById("nc-list");
+  list.innerHTML = "";
+  for (const name of NOW.elevated || []) {
+    const r = NOW.districts[name];
+    const s = document.createElement("span");
+    s.className = "chip on";
+    s.style.color = r.level === "high" ? "#bd0026" : "#f28e2b";
+    s.textContent = `${name} · ${r.level}`;
+    s.onclick = () => { document.getElementById("d-pick").value = name; render(); };
+    list.appendChild(s);
+  }
+  if (!(NOW.elevated || []).length)
+    list.innerHTML = "<span class='muted'>No districts flagged in the latest nowcast.</span>";
 }
 
 const LS_COLORS = ["#20242b", "#4e79a7", "#76b7b2", "#f6c85f", "#f28e2b", "#bd0026"];

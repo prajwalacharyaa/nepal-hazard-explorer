@@ -100,3 +100,20 @@ source_url, report_sources, glide, notes`
 source later catches up, `aggregate.py`'s spatial dedup merges the two and keeps
 the richer record. Currently holds the 2026-08-26 Langtang / Rasuwa cascade
 (ice-rock avalanche → river-dam breach → debris flow → flash flood).
+
+## 8. Daily landslide nowcast — Approach C  (`fetch_nowcast.py`)
+
+NASA LHASA Global Landslide Nowcast v1.1 (GES DISC) — rainfall-driven, ~1 km,
+daily, categorical (moderate / high).
+
+1. Create an Earthdata login: <https://urs.earthdata.nasa.gov/>
+2. Generate a token: profile → **Generate Token**.
+3. Local run: `EARTHDATA_TOKEN=<token> python pipeline/fetch_nowcast.py`
+4. CI: add the token as repo secret **`EARTHDATA_TOKEN`**. The
+   `.github/workflows/nowcast.yml` Action then runs daily (06:30 UTC), writes
+   `data/processed/nowcast.json`, and commits it.
+
+Without a token the script exits cleanly and the "C" section shows a
+"not available" message. Dataset page:
+<https://disc.gsfc.nasa.gov/datasets/Global_Landslide_Nowcast_1.1/summary>
+(if the archive path changes, update `BASE`/`FNAME` in `fetch_nowcast.py`).
