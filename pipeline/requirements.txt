@@ -1,5 +1,12 @@
+# core pipeline (fetch_* / clean_merge / aggregate / outlook / glof)
 pandas>=2.2
+numpy>=1.26
 geopandas>=1.0
 shapely>=2.0
 requests>=2.32
 python-dateutil>=2.9
+
+# only for the optional experimental layers A and C:
+#   susceptibility.py, fetch_nowcast.py
+rasterio>=1.3
+rasterstats>=0.19

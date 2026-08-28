@@ -246,9 +246,15 @@ def load_desinventar() -> list[dict]:
         district = (g("name1") or "").title() or None
         village = g("name2") or None
 
+        # DesInventar `serial` is not globally unique (a handful collide);
+        # `uu_id` is a proper UUID — prefer it.
+        serial = g("serial")
+        uid = g("uu_id")
+        ev_id = f"desinventar-{uid}" if uid else f"desinventar-{serial}"
+
         row = blank_row()
         row.update(
-            id=f"desinventar-{g('serial')}",
+            id=ev_id,
             source="desinventar",
             date=iso, date_precision=prec, year=yr, month=mo,
             hazard=hazard, hazard_raw=raw_evt,
@@ -390,6 +396,20 @@ def main():
     before = len(rows)
     rows = [r for r in rows if r["hazard"] in KEEP_HAZARDS]
     print(f"  scope filter: {before} -> {len(rows)} (kept {sorted(KEEP_HAZARDS)})")
+
+    # guarantee globally unique ids (permalinks depend on it)
+    seen_ids: dict[str, int] = {}
+    dups = 0
+    for r in rows:
+        i = str(r["id"])
+        if i in seen_ids:
+            seen_ids[i] += 1
+            r["id"] = f"{i}--{seen_ids[i]}"
+            dups += 1
+        else:
+            seen_ids[i] = 0
+    if dups:
+        print(f"  de-collided {dups} duplicate id(s)")
 
     rows = dedupe_exact(rows)
     for r in rows:

@@ -1,0 +1,73 @@
+name: Weekly data refresh
+
+# Re-pulls BIPAD (and, monthly, DesInventar + HDX boundaries), rebuilds every
+# data/processed/ artifact, and commits the result. Keeps the published site
+# current without a manual run. Major disasters appear here once BIPAD logs them.
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"        # Mondays 05:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r pipeline/requirements.txt
+
+      # DesInventar (182 MB) + HDX boundaries change rarely — cache for a month.
+      - name: Cache slow sources
+        id: rawcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/raw/desinventar_npl.xml
+            data/raw/desinventar_shapes
+            data/raw/npl_adm
+            data/raw/npl_adm2_districts.geojson
+            data/raw/npl_adm3_palikas.geojson
+            data/raw/npl_pop_adm2.csv
+          key: raw-static-${{ github.run_id }}
+          restore-keys: raw-static-
+
+      - name: Fetch DesInventar + boundaries (skipped if cached)
+        if: steps.rawcache.outputs.cache-hit != 'true'
+        working-directory: pipeline
+        run: |
+          python fetch_desinventar.py
+          python fetch_boundaries.py
+
+      - name: Fetch BIPAD (always)
+        working-directory: pipeline
+        run: python fetch_bipad.py
+
+      - name: Rebuild
+        working-directory: pipeline
+        run: |
+          python clean_merge.py
+          python aggregate.py
+          python outlook.py
+          python glof.py
+
+      - name: Commit if changed
+        run: |
+          git add data/processed
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
+          git config user.name  "refresh-bot"
+          git config user.email "refresh-bot@users.noreply.github.com"
+          git commit -m "data refresh: $(date -u +%F)"
+          git push

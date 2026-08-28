@@ -1,0 +1,18 @@
+name: Data checks
+
+on:
+  push:
+    paths: ["data/processed/**", "pipeline/**", ".github/workflows/checks.yml"]
+  pull_request:
+    paths: ["data/processed/**", "pipeline/**"]
+  workflow_dispatch: {}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python pipeline/checks.py   # stdlib only
