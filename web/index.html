@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Nepal Water &amp; Slope Hazard Heatmap</title>
+  <title>Nepal Water &amp; Slope Hazard Explorer</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -12,31 +12,38 @@
 
   <aside id="panel">
     <h1>Nepal Water &amp; Slope Hazards</h1>
-    <p class="sub">Landslides, floods, flash floods, GLOFs, debris flows, avalanches.</p>
+    <p class="sub">Landslides, floods, flash floods, GLOFs, debris flows, avalanches — 1971 to present.</p>
+
+    <div class="group locate">
+      <label>Find your area</label>
+      <button id="near-me">📍 Use my location</button>
+      <select id="district-pick"><option value="">Jump to a district…</option></select>
+      <p class="hint">or click any district on the map</p>
+    </div>
 
     <div class="group">
-      <label>View</label>
+      <label>Map view</label>
       <div id="view-tabs" class="tabs">
         <button data-view="heatmap" class="active">Density</button>
         <button data-view="choropleth">Districts</button>
-        <button data-view="hexbin">Hexbin&nbsp;+&nbsp;time</button>
+        <button data-view="hexbin">Hexbin + time</button>
         <button data-view="calendar">Calendar</button>
       </div>
     </div>
 
     <div class="group">
       <label>Hazard type</label>
-      <div id="hazard-filter" class="chips"><!-- filled by JS --></div>
+      <div id="hazard-filter" class="chips"></div>
     </div>
 
     <div class="group" id="year-group">
-      <label>Year range: <span id="year-label"></span></label>
+      <label>Years: <span id="year-label"></span></label>
       <input type="range" id="year-min" />
       <input type="range" id="year-max" />
     </div>
 
     <div class="group" id="metric-group" hidden>
-      <label>District metric</label>
+      <label>District shading</label>
       <select id="metric">
         <option value="events">Event count</option>
         <option value="deaths">Deaths</option>
@@ -47,7 +54,16 @@
 
     <div id="legend" class="group"></div>
     <div id="stats" class="group"></div>
-    <p class="src">Sources: Nepal DRR/BIPAD, NASA Global Landslide Catalog, DesInventar Sentinel. Not authoritative.</p>
+
+    <div class="group">
+      <button id="download-view" class="secondary">⬇ Download current selection (CSV + GeoJSON)</button>
+    </div>
+
+    <p class="src">
+      Sources: <a href="https://bipadportal.gov.np" target="_blank" rel="noopener">Nepal DRR/BIPAD</a>,
+      <a href="https://www.desinventar.net" target="_blank" rel="noopener">DesInventar Sentinel</a>.
+      Coordinates for older records are village/district centroids. Not an authoritative hazard assessment.
+    </p>
   </aside>
 
   <div id="calendar-panel" hidden></div>
@@ -57,9 +73,13 @@
     <span id="time-label"></span>
   </div>
 
+  <div id="area-card" hidden></div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/deck.gl@9.0.38/dist.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
-  <script type="module" src="app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
+  <script src="common.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

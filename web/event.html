@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Event record — Nepal hazards</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="doc">
+  <header class="doc-head">
+    <a href="index.html" class="back">← Map</a>
+    <h1 id="e-title">Event</h1>
+    <p id="e-sub" class="sub"></p>
+  </header>
+
+  <main class="doc-body narrow">
+    <section class="split">
+      <div id="e-map" class="mini-map"></div>
+      <dl id="e-facts" class="facts"></dl>
+    </section>
+
+    <section>
+      <h2>Citation</h2>
+      <pre id="e-cite" class="cite"></pre>
+      <button id="dl-rec" class="secondary">⬇ Download this record (GeoJSON)</button>
+      <a id="e-district-link" class="secondary" href="#">All events in this district →</a>
+    </section>
+
+    <nav class="prevnext"><a id="e-prev" href="#">← earlier</a><a id="e-next" href="#">later →</a></nav>
+    <p class="src" id="e-src"></p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+  <script src="common.js"></script>
+  <script src="event.js"></script>
+</body>
+</html>

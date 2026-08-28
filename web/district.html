@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>District hazard history — Nepal</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="doc">
+  <header class="doc-head">
+    <a href="index.html" class="back">← Map</a>
+    <h1 id="d-name">District</h1>
+    <p id="d-sub" class="sub"></p>
+  </header>
+
+  <main class="doc-body">
+    <section id="answers" class="cards"></section>
+
+    <section class="split">
+      <div id="d-map" class="mini-map"></div>
+      <div id="d-charts"></div>
+    </section>
+
+    <section>
+      <div class="row-between">
+        <h2>All recorded events</h2>
+        <div>
+          <button id="dl-csv" class="secondary">⬇ CSV</button>
+          <button id="dl-geo" class="secondary">⬇ GeoJSON</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table id="d-table">
+        <thead><tr>
+          <th data-k="date">Date</th><th data-k="hazard">Hazard</th>
+          <th data-k="deaths">Deaths</th><th data-k="missing">Missing</th>
+          <th data-k="houses_destroyed">Houses lost</th>
+          <th data-k="severity_score">Severity</th>
+          <th>Place / source</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+
+    <p class="src" id="d-src"></p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+  <script src="common.js"></script>
+  <script src="district.js"></script>
+</body>
+</html>

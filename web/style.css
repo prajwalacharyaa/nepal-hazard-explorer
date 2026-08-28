@@ -63,3 +63,82 @@ select { width: 100%; padding: 6px; background: #222831; color: var(--ink); bord
   #panel { width: calc(100% - 24px); }
   #calendar-panel { width: calc(100% - 24px); }
 }
+
+/* ---------- shared additions ---------- */
+button.secondary {
+  background: #222831; color: var(--ink); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; margin-right: 6px;
+}
+button.secondary:hover { border-color: var(--accent); }
+a.secondary { text-decoration: none; display: inline-block; }
+.muted { color: var(--muted); }
+.cap { font-size: 11px; color: var(--muted); line-height: 1.5; margin: 6px 0 0; }
+.big { font-size: 15px; font-weight: 600; margin: 2px 0; }
+.pill { background: #222831; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 10px; }
+
+/* locate block on main panel */
+.locate button, #district-pick {
+  width: 100%; margin-bottom: 6px; padding: 7px; border-radius: 6px;
+  background: var(--accent); color: #1a1a1a; border: none; font-weight: 600; cursor: pointer;
+}
+#district-pick { background: #222831; color: var(--ink); border: 1px solid var(--border); font-weight: 400; }
+.locate .hint { font-size: 11px; color: var(--muted); margin: 0; }
+
+/* area card popup on main map */
+#area-card {
+  position: absolute; left: 328px; top: 12px; width: 300px; z-index: 6;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px;
+}
+#area-card .x { position: absolute; right: 8px; top: 6px; background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; }
+#area-card h3 { margin: 0 0 4px; }
+#area-card .tag { font-size: 11px; white-space: nowrap; }
+#area-card a.cta, .doc a.cta {
+  display: inline-block; margin-top: 8px; background: var(--accent); color: #1a1a1a;
+  padding: 6px 10px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 12px;
+}
+
+/* ---------- document pages (district / event) ---------- */
+body.doc { height: auto; background: var(--bg); }
+.doc-head { padding: 20px 24px 12px; border-bottom: 1px solid var(--border); }
+.doc-head .back { color: var(--muted); text-decoration: none; font-size: 12px; }
+.doc-head h1 { margin: 6px 0 2px; font-size: 22px; }
+.doc-body { padding: 20px 24px 60px; max-width: 1080px; }
+.doc-body.narrow { max-width: 780px; }
+.doc-body section { margin-bottom: 28px; }
+.row-between { display: flex; justify-content: space-between; align-items: baseline; }
+.doc h2 { font-size: 15px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.doc h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 6px; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.card.empty { opacity: .55; }
+.card .none { color: var(--muted); font-size: 12px; }
+.card p { margin: 2px 0; font-size: 12px; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.mini-map { height: 340px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+
+.hbar { display: flex; height: 14px; border-radius: 3px; overflow: hidden; margin: 4px 0; }
+.hbar span { display: block; }
+
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 13px; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+
+.cite { white-space: pre-wrap; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px; font-size: 12px; line-height: 1.5; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+#d-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+#d-table th, #d-table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+#d-table th { cursor: pointer; color: var(--muted); position: sticky; top: 0; background: var(--panel); }
+#d-table th[data-sort="desc"]::after { content: " ▾"; }
+#d-table th[data-sort="asc"]::after { content: " ▴"; }
+#d-table tbody tr:hover { background: #1d222a; }
+#d-table a { color: var(--accent); text-decoration: none; }
+
+.prevnext { display: flex; justify-content: space-between; font-size: 12px; }
+.prevnext a { color: var(--accent); text-decoration: none; }
+.prevnext a.disabled { color: var(--border); pointer-events: none; }
+
+@media (max-width: 760px) { .split { grid-template-columns: 1fr; } #area-card { left: 12px; top: auto; bottom: 12px; } }

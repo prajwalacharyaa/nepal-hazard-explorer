@@ -202,6 +202,16 @@ def build_districts(features, gdf, pop):
     # points that missed a polygon: keep their own district string
     joined["district"] = joined["district_right"].fillna(joined.get("district_left"))
 
+    # stamp the resolved district back onto every feature (BIPAD rows had none)
+    resolved = {}
+    for r in joined.itertuples():
+        if getattr(r, "id", None) and r.id not in resolved:
+            d = r.district
+            resolved[r.id] = None if (not d or (isinstance(d, float) and math.isnan(d))) else d
+    for f in features:
+        f["properties"]["district"] = resolved.get(f["properties"]["id"],
+                                                   f["properties"].get("district"))
+
     agg = {}
     for r in joined.itertuples():
         d = r.district
@@ -290,6 +300,62 @@ def build_calendar(features):
     print(f"  wrote calendar.json ({len(out)} year-months)")
 
 
+# ---------------------------------------------------------------- trimming ----
+# fields always kept; count fields kept only when non-zero to shrink the file
+_ALWAYS = ("id", "source", "date", "date_precision", "year", "month", "hazard",
+           "district", "geo_precision", "severity_score", "severity_class",
+           "title", "source_url")
+_OPTIONAL = ("deaths", "missing", "injured", "people_affected",
+             "houses_destroyed", "houses_damaged", "place_detail",
+             "report_sources", "glide")
+
+
+def slugify(name: str) -> str:
+    return "".join(c.lower() if c.isalnum() else "-" for c in str(name)).strip("-")
+
+
+def trim_props(p: dict) -> dict:
+    out = {k: p[k] for k in _ALWAYS if p.get(k) is not None}
+    for k in _OPTIONAL:
+        v = p.get(k)
+        if v not in (None, 0, "", "0"):
+            out[k] = v
+    return out
+
+
+def write_events_split(features):
+    """Full trimmed events.geojson for the map, plus one small file per district
+    for the district pages / downloads."""
+    for f in features:
+        f["properties"] = trim_props(f["properties"])
+        f["geometry"]["coordinates"] = [round(c, 4) for c in f["geometry"]["coordinates"]]
+
+    (PROCESSED / "events.geojson").write_text(
+        json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False),
+        encoding="utf-8")
+    kb = (PROCESSED / "events.geojson").stat().st_size / 1024
+    print(f"  events.geojson: {len(features)} events, {kb:.0f} KB")
+
+    by_d = defaultdict(list)
+    for f in features:
+        by_d[f["properties"].get("district") or "unknown"].append(f)
+    outdir = PROCESSED / "events_by_district"
+    outdir.mkdir(exist_ok=True)
+    for old in outdir.glob("*.json"):
+        old.unlink()
+    manifest = {}
+    for d, feats in by_d.items():
+        feats.sort(key=lambda f: f["properties"]["date"], reverse=True)
+        slug = slugify(d)
+        (outdir / f"{slug}.json").write_text(
+            json.dumps({"type": "FeatureCollection", "district": d, "features": feats},
+                       ensure_ascii=False), encoding="utf-8")
+        manifest[d] = {"slug": slug, "count": len(feats)}
+    (PROCESSED / "events_by_district_manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+    print(f"  events_by_district/: {len(manifest)} files")
+
+
 # ------------------------------------------------------------------- main ----
 def main():
     fc = json.loads((PROCESSED / "events.geojson").read_text(encoding="utf-8"))
@@ -298,19 +364,14 @@ def main():
 
     features = fill_coordinates(features)
     features = spatial_dedupe(features)
-
-    for f in features:                       # drop temp fields
+    for f in features:
         for k in ("_lvl1", "_lvl2"):
             f["properties"].pop(k, None)
 
-    (PROCESSED / "events.geojson").write_text(
-        json.dumps({"type": "FeatureCollection", "features": features},
-                   ensure_ascii=False), encoding="utf-8")
-    print(f"  rewrote events.geojson ({len(features)} events, all placed)")
-
     gdf = choropleth_geometry()
-    build_districts(features, gdf, load_pop())
+    build_districts(features, gdf, load_pop())   # uses full props, before trim
     build_calendar(features)
+    write_events_split(features)                 # trims props in place, writes files
 
 
 if __name__ == "__main__":
