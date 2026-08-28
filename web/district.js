@@ -39,7 +39,8 @@ async function init() {
   document.getElementById("d-src").innerHTML =
     "Sources: Nepal DRR/BIPAD, DesInventar Sentinel, curated major events. Older " +
     "records are placed at village or district centroids — treat point positions " +
-    "as approximate. Event counts rise sharply after ~2011 because reporting improved.";
+    "as approximate. Event counts rise sharply after ~2011 because reporting improved. " +
+    '<a href="methodology.html">Methodology &amp; data notes →</a>';
   NHM.stampMeta(document.getElementById("d-src").insertAdjacentElement(
     "beforebegin", Object.assign(document.createElement("p"), { className: "src" })));
 }

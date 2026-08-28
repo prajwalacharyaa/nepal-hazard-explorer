@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Methodology — Nepal Water &amp; Slope Hazard Explorer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="doc">
+  <header class="doc-head">
+    <a href="index.html" class="back">← Map</a>
+    <h1>Methodology &amp; data notes</h1>
+    <p class="sub" id="meta-stamp"></p>
+  </header>
+
+  <main class="doc-body narrow prose">
+    <p>This project compiles a single, browsable record of water- and
+      slope-driven hazard events in Nepal — landslides, floods, flash floods,
+      GLOFs, debris flows and avalanches — from 1971 to the present, and adds a
+      clearly-separated <a href="experimental.html">experimental</a> section for
+      modelled context. It is a research and information aid, <b>not</b> an
+      operational warning system.</p>
+
+    <h2>1. Sources</h2>
+    <ul>
+      <li><b>Nepal DRR Portal / BIPAD</b> — incident records from ~2011 onward,
+        with point coordinates and casualty / loss fields. The bulk of recent
+        data.</li>
+      <li><b>DesInventar Sentinel (UNDRR)</b> — the national disaster inventory,
+        1971–2013, recorded at district and (mostly) village level. Provides the
+        deep historical tail and the only pre-2011 coverage.</li>
+      <li><b>OCHA HDX</b> — modern administrative boundaries (77 districts, 775
+        municipalities) and 2023 district population.</li>
+      <li><b>Curated major events</b> — a small hand-maintained file
+        (<code>manual_events.csv</code>) for headline disasters that the
+        automated feeds miss or enter only after a delay. Currently one row: the
+        26 August 2026 Langtang / Rasuwa cascade.</li>
+    </ul>
+    <p>Full licensing and attribution: <a href="../DATA_LICENSE.md">DATA_LICENSE.md</a>.</p>
+
+    <h2>2. Unified record</h2>
+    <p>Every source is normalised to one schema: date (with a precision flag),
+      hazard type, district, municipality, coordinates, a location-precision
+      flag, and the casualty / house-damage fields where reported. Original
+      labels, source URLs, GLIDE numbers and reporting sources are kept for
+      audit.</p>
+
+    <h2>3. Hazard classification</h2>
+    <p>Source labels are mapped to seven categories. Everything outside the six
+      water/slope hazards (BIPAD also logs fire, lightning, epidemics, road
+      accidents, …) is dropped. "Heavy rainfall" is treated as a driver, not a
+      discrete impact event, and is excluded to avoid inflating flood counts.</p>
+
+    <h2>4. Location &amp; precision</h2>
+    <p>BIPAD records carry real coordinates. DesInventar records do not, so they
+      are placed at the centroid of the reported village (preferred) or district,
+      taken from the shapefiles bundled with the DesInventar export, with a small
+      deterministic jitter so many events sharing one centroid do not stack on a
+      single pixel. Each event carries <code>geo_precision</code>:</p>
+    <ul>
+      <li><code>exact</code> — a reported point (~52% of events)</li>
+      <li><code>village_centroid</code> — placed at the village centroid</li>
+      <li><code>district_centroid</code> — only the district was known</li>
+      <li><code>approximate</code> — curated event, best-estimate point</li>
+    </ul>
+    <p>On the map, centroid points render as hollow rings and contribute half
+      weight to the heat layer; "Precise locations only" hides them entirely.
+      Treat any non-<code>exact</code> point as "somewhere in this area".</p>
+
+    <h2>5. De-duplication</h2>
+    <p>Two passes. First, exact double-entries (same hazard, same date, same
+      place, same headline losses) are collapsed. Then a spatial pass merges
+      records of the same hazard within 2 days and 5 km of each other, keeping
+      the one with the richer casualty data and recording both source names.
+      Ties are broken by lowest record id, so a rebuild is byte-for-byte
+      reproducible. This is a heuristic: it will occasionally merge two genuinely
+      distinct nearby events, or miss a duplicate that was logged far apart.</p>
+
+    <h2>6. Severity index</h2>
+    <p>A single composite score drives the heat-layer weight, the marker size
+      and the "worst event" pick:</p>
+    <pre class="cite">score = 5·deaths + 5·missing + 1·injured
+      + 0.2·houses_destroyed + 0.05·houses_damaged
+      + 0.002·people_affected</pre>
+    <p>class breaks: <code>minor</code> 0 · <code>small</code> &lt;5 ·
+      <code>moderate</code> &lt;25 · <code>major</code> &lt;100 ·
+      <code>catastrophic</code> ≥100.</p>
+    <p>The weights are a <b>judgement call</b>, not a validated model — they
+      exist to make one number comparable across events, with deaths dominating.
+      If you need a different emphasis, recompute from the raw fields, which are
+      all retained.</p>
+
+    <h2>7. Known biases &amp; limits</h2>
+    <ul>
+      <li><b>Reporting ramp.</b> Recorded events per year rise sharply after
+        ~2011. This is mostly BIPAD's improving coverage, not a real change in
+        hazard. Compare decades, and per-capita rates, with care.</li>
+      <li><b>Coverage seam.</b> DesInventar ends in 2013; BIPAD starts ~2011.
+        The overlap is de-duplicated, but the pre-2011 record is thinner and
+        district-level.</li>
+      <li><b>Sub-district geography.</b> Nepal has no open ward (adm4) boundary
+        dataset, so municipality (adm3) is the finest level available. Ward
+        numbers survive only inside BIPAD event titles.</li>
+      <li><b>Provisional figures.</b> Casualty counts for very recent major
+        events change for weeks. The Langtang row was entered at 489 dead /
+        1,500+ missing (Nepal Police, 28 Aug 2026).</li>
+      <li><b>Not verified.</b> All figures are as recorded by the original
+        source.</li>
+    </ul>
+
+    <h2>8. Experimental layers</h2>
+    <p>The <a href="experimental.html">experimental section</a> is walled off and
+      carries its own disclaimer. It contains: (D) a descriptive seasonal
+      climatology from this dataset — <b>not a forecast</b>; (A) zonal summaries
+      of published global susceptibility / flood-hazard models; (C) the NASA
+      LHASA daily rainfall-driven nowcast; and (B) a curated dangerous-glacial-lake
+      inventory paired with the historical record of its downstream river
+      corridor. None of these predict a specific event.</p>
+
+    <h2>9. Getting the data</h2>
+    <p>Everything the site loads is a static file under
+      <code>data/processed/</code> — it doubles as an API:</p>
+    <ul>
+      <li><code>events.geojson</code> — every event, one Point feature each</li>
+      <li><code>events_by_district/&lt;slug&gt;.json</code> — one district's events</li>
+      <li><code>district_index.json</code>, <code>palika_index.json</code> — rollups</li>
+      <li><code>calendar.json</code>, <code>outlook.json</code>,
+        <code>glof.json</code>, <code>susceptibility.json</code>,
+        <code>nowcast.json</code></li>
+      <li><code>meta.json</code> — build date, counts, span, latest event</li>
+    </ul>
+    <p>The map's download button exports whatever is currently filtered as CSV +
+      GeoJSON. Per-district and per-event downloads are on those pages.</p>
+
+    <h2>10. Citation</h2>
+    <pre class="cite">Nepal Water &amp; Slope Hazard Explorer (2026). Compiled hazard-event
+dataset for Nepal, 1971–present, from Nepal DRR/BIPAD and UNDRR DesInventar
+Sentinel, with administrative and population data from OCHA HDX.
+Accessed &lt;date&gt;. &lt;URL&gt;</pre>
+    <p>Code: MIT (<a href="../LICENSE">LICENSE</a>). Data: per source, see
+      <a href="../DATA_LICENSE.md">DATA_LICENSE.md</a>. For official warnings use
+      Nepal's DHM and NDRRMA.</p>
+  </main>
+
+  <script src="common.js"></script>
+  <script>window.NHM.stampMeta("#meta-stamp");</script>
+</body>
+</html>

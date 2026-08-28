@@ -18,6 +18,10 @@ statistical outlook (Approach D); susceptibility (A), daily nowcast (C) and GLOF
 what-if scenarios (B) are planned. The experimental layers are descriptive/modelled
 context, **not** an operational warning system.
 
+Full method, biases and citation: [`web/methodology.html`](web/methodology.html).
+Licensing: code MIT ([`LICENSE`](LICENSE)), data per source
+([`DATA_LICENSE.md`](DATA_LICENSE.md)).
+
 ## Stack
 
 - **Pipeline:** Python (pandas, geopandas) — produces static GeoJSON/JSON.

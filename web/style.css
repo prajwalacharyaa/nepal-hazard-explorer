@@ -175,3 +175,9 @@ section.planned .chip {
 .meter span { display: block; height: 100%; }
 .group > label.inline-check { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: none; letter-spacing: 0; color: var(--ink); cursor: pointer; margin-bottom: 4px; }
 .inline-check input { width: auto; }
+.prose { line-height: 1.65; font-size: 14px; }
+.prose h2 { font-size: 15px; margin-top: 28px; }
+.prose ul { padding-left: 20px; }
+.prose li { margin: 4px 0; }
+.prose code { background: #222831; border: 1px solid var(--border); border-radius: 3px; padding: 0 3px; font-size: 12px; }
+.prose pre.cite { margin: 8px 0; }

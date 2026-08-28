@@ -111,5 +111,6 @@ function render(feat, siblings) {
 
   document.getElementById("e-src").innerHTML =
     "Figures are as recorded by the original source and are not independently verified. " +
-    "For older records the mapped point is a village or district centroid, not the exact site.";
+    "For older records the mapped point is a village or district centroid, not the exact site. " +
+    '<a href="methodology.html">Methodology &amp; data notes →</a>';
 }
