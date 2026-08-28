@@ -355,7 +355,7 @@ def dedupe_exact(rows: list[dict]) -> list[dict]:
     has a real coordinate."""
     kept: list[dict] = []
     seen: dict[tuple, dict] = {}
-    for r in rows:
+    for r in sorted(rows, key=lambda r: (r["date"], r["source"], str(r["id"]))):
         key = (
             r["hazard"], r["date"],
             r.get("_lvl2") or r.get("district") or "",
@@ -396,6 +396,7 @@ def main():
         r["severity_score"] = score(r)
         r["severity_class"] = severity_class(r["severity_score"])
 
+    rows.sort(key=lambda r: str(r["id"]))          # stable, reproducible output
     feats = []
     for r in rows:
         if r["lon"] is None or r["lat"] is None:

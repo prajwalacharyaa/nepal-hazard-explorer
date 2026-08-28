@@ -142,7 +142,8 @@ def _richness(p):
 
 def spatial_dedupe(features, km=5.0, days=2):
     from datetime import datetime
-    feats = sorted(features, key=lambda f: f["properties"]["date"])
+    # deterministic order: date, then id — so a rebuild yields the same result
+    feats = sorted(features, key=lambda f: (f["properties"]["date"], str(f["properties"]["id"])))
     kept = []
     for f in feats:
         p = f["properties"]
@@ -161,7 +162,8 @@ def spatial_dedupe(features, km=5.0, days=2):
             kept.append(f)
             continue
         q = match["properties"]
-        if _richness(p) > _richness(q):
+        # merge losing row into the kept one; tie on richness -> keep lower id
+        if (_richness(p), str(q["id"])) > (_richness(q), str(p["id"])):
             for k in ("deaths", "missing", "injured", "people_affected",
                       "houses_destroyed", "houses_damaged", "severity_score",
                       "severity_class"):
@@ -399,6 +401,7 @@ def write_events_split(features):
         f["properties"] = trim_props(f["properties"])
         f["geometry"]["coordinates"] = [round(c, 4) for c in f["geometry"]["coordinates"]]
 
+    features.sort(key=lambda f: str(f["properties"]["id"]))   # reproducible file
     (PROCESSED / "events.geojson").write_text(
         json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False),
         encoding="utf-8")
@@ -414,7 +417,7 @@ def write_events_split(features):
         old.unlink()
     manifest = {}
     for d, feats in by_d.items():
-        feats.sort(key=lambda f: f["properties"]["date"], reverse=True)
+        feats.sort(key=lambda f: (f["properties"]["date"], str(f["properties"]["id"])), reverse=True)
         slug = slugify(d)
         (outdir / f"{slug}.json").write_text(
             json.dumps({"type": "FeatureCollection", "district": d, "features": feats},
