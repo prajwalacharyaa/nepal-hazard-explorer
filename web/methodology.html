@@ -118,21 +118,24 @@
       severity class) has an <b>impact view</b> showing a downstream corridor.
       There are two kinds, and the page always says which you are looking at:</p>
     <ul>
-      <li><b>Modelled</b> (dashed) — the event point is snapped to the nearest
-        reach of the <a href="https://www.hydrosheds.org/products/hydrorivers"
-        target="_blank" rel="noopener">HydroRIVERS</a> network and the route is
-        traced downstream along that network's flow topology, for a distance
-        scaled by the event's severity score (3–120&nbsp;km). This is the path
-        water and debris <i>would</i> follow. It is <b>not</b> an observed flood
-        extent, and it says nothing about how wide the impact was or how far it
-        actually reached.</li>
-      <li><b>Observed</b> (solid, with a citation) — a path hand-digitised from
-        published reporting for a major documented event, kept in
-        <code>data/raw/curated_paths.geojson</code>. Accurate only to a few
-        hundred metres, and only as good as its source.</li>
+      <li><b>Modelled reach</b> (dashed) — the event point is snapped to the
+        nearest reach of the <a href="https://www.hydrosheds.org/products/hydrorivers"
+        target="_blank" rel="noopener">HydroRIVERS</a> network and routed
+        downstream along that network's flow topology for a distance scaled by
+        the event's severity score (3–120&nbsp;km). The <i>course</i> is a real
+        mapped river; the <i>distance</i> is an estimate.</li>
+      <li><b>Documented reach</b> (solid, with a citation) — same routing, but
+        the distance comes from published reporting rather than from severity,
+        via <code>data/raw/curated_reaches.json</code>. For the 2026 Langtang
+        cascade that is the reported ~100&nbsp;km down the Bhote Koshi and
+        Trishuli.</li>
     </ul>
-    <p>No open dataset records the true inundation footprint of Nepal's
-      historical events, which is why the modelled corridor exists at all.
+    <p>In neither case is the line hand-drawn: courses always follow the mapped
+      river network, because sketching a river by hand invites exactly the sort
+      of error the tool is meant to avoid. Equally, neither is an observed
+      inundation footprint — no open dataset records the true extent of Nepal's
+      historical events, which is why the modelled corridor exists at all. The
+      corridor shows a route, never a width.
       Municipalities listed along a corridor are <b>exposure context</b> — the
       units the path crosses — not a claim that each was affected by that event.
       Elevation profiles are sampled from SRTM 30&nbsp;m via OpenTopoData.</p>

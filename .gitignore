@@ -17,7 +17,7 @@ data/raw/*
 # hand-curated, not re-fetchable — keep in git:
 !data/raw/manual_events.csv
 !data/raw/dangerous_lakes.csv
-!data/raw/curated_paths.geojson
+!data/raw/curated_reaches.json
 
 # Processed outputs ARE committed (GitHub Pages serves them):
 !data/processed/

@@ -71,9 +71,10 @@ function renderPanel() {
 
   document.getElementById("i-src").innerHTML =
     "Figures are as recorded by the original source and are not independently " +
-    "verified. " + (CORRIDOR && !CORRIDOR.observed
-      ? "The corridor is modelled, not an observed flood extent. "
-      : "") +
+    "verified. The corridor follows the mapped river network and is not an " +
+    "observed inundation extent" +
+    (CORRIDOR && !CORRIDOR.documented_reach
+      ? "; its length is estimated from severity. " : ". ") +
     '<a href="methodology.html">Methodology &amp; data notes →</a>';
 }
 
@@ -81,10 +82,10 @@ function renderCorridorPanel() {
   document.getElementById("i-corridor-field").hidden = false;
   document.getElementById("i-corridor-len").textContent = `${CORRIDOR.length_km} km`;
   const note = document.getElementById("i-corridor-note");
-  note.innerHTML = CORRIDOR.observed
-    ? `<b>Observed path.</b> ${CORRIDOR.source_note || ""}` +
+  note.innerHTML = CORRIDOR.documented_reach
+    ? `<b>Documented reach.</b> ${CORRIDOR.source_note || ""}` +
       (CORRIDOR.reference ? `<br><span class="ref">${CORRIDOR.reference}</span>` : "")
-    : `<b>Modelled path.</b> ${CORRIDOR.source_note || ""}`;
+    : `<b>Modelled reach.</b> ${CORRIDOR.source_note || ""}`;
 
   if (CORRIDOR.elevation && CORRIDOR.elevation.length > 3) {
     document.getElementById("i-profile-field").hidden = false;
@@ -179,7 +180,7 @@ function buildMap() {
           "line-color": col, "line-opacity": 0.85,
           "line-width": ["interpolate", ["linear"], ["zoom"], 7, 2.2, 12, 5],
           // dashed when modelled, solid when observed
-          ...(CORRIDOR.observed ? {} : { "line-dasharray": [2, 1.4] }),
+          ...(CORRIDOR.documented_reach ? {} : { "line-dasharray": [2, 1.4] }),
         } });
       // travelling pulse used by the animation
       map.addLayer({ id: "corridor-pulse", type: "line", source: "corridor",

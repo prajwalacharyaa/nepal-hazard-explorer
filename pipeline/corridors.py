@@ -6,13 +6,15 @@ NEXT_DOWN topology, spending a distance budget scaled by the event's severity.
 The result is a MODELLED potential corridor — the reach water and debris would
 follow — not an observed inundation footprint. The web page labels it as such.
 
-Where a hand-authored path exists in data/raw/curated_paths.geojson (sourced
-from the literature for major documented events) that observed path is used
-instead and flagged `observed: true`.
+For major documented events, data/raw/curated_reaches.json supplies the
+downstream distance reported in the literature. That overrides the severity
+estimate, so the LENGTH is sourced while the COURSE still follows the mapped
+river network — we never hand-draw a river. Those are flagged
+`documented_reach: true` and carry their citation.
 
-Each corridor also carries the municipalities it passes through, other recorded
-events along the same reach, and (for the most severe events) an elevation
-profile from the free OpenTopoData SRTM API.
+Each corridor also carries the municipalities it passes through and other
+recorded events along the same reach. Elevation profiles are added afterwards
+by corridor_elevation.py, which is rate-limited and therefore resumable.
 
 Inputs : data/raw/hydrorivers_nepal.gpkg   (fetch_rivers.py)
          data/processed/events.geojson, palikas.geojson, palika_index.json
@@ -23,24 +25,23 @@ Outputs: data/processed/corridors/<event id>.json
 from __future__ import annotations
 
 import json
-import time
 from collections import defaultdict
 
 import geopandas as gpd
 import pandas as pd
-import requests
 from shapely.geometry import LineString, Point, shape
 from shapely.ops import linemerge, substring
 from shapely.strtree import STRtree
+from pyproj import Transformer
 
 from config import RAW, PROCESSED
 
 METRIC = 32645                      # UTM 45N — metres, good for Nepal
+# one reusable transformer: building a GeoSeries per corridor was the
+# single biggest cost in this script
+TO_WGS = Transformer.from_crs(METRIC, 4326, always_xy=True)
 SNAP_MAX_M = 4000                   # give up if no river within 4 km
 OUT = PROCESSED / "corridors"
-ELEV_CACHE = RAW / "elev_cache.json"
-ELEV_CLASSES = {"major", "catastrophic"}   # profile only for the worst events
-ELEV_SAMPLES = 24
 
 
 # --------------------------------------------------------------- budget ----
@@ -92,35 +93,6 @@ def trace_downstream(start_id, geom, nxt, budget_m, start_pt=None):
     return merged, used / 1000.0
 
 
-# ------------------------------------------------------------- elevation ---
-def load_cache():
-    if ELEV_CACHE.exists():
-        return json.loads(ELEV_CACHE.read_text(encoding="utf-8"))
-    return {}
-
-
-def elevation_profile(coords, cache):
-    """Sample elevation along the path via OpenTopoData (free, no key)."""
-    key = f"{coords[0][0]:.4f},{coords[0][1]:.4f}|{len(coords)}|{coords[-1][0]:.4f}"
-    if key in cache:
-        return cache[key]
-    step = max(1, len(coords) // ELEV_SAMPLES)
-    pts = coords[::step][:ELEV_SAMPLES]
-    locs = "|".join(f"{lat:.5f},{lon:.5f}" for lon, lat in pts)
-    try:
-        r = requests.get(f"https://api.opentopodata.org/v1/srtm30m?locations={locs}",
-                         timeout=45)
-        if r.status_code != 200:
-            return None
-        vals = [x.get("elevation") for x in r.json().get("results", [])]
-        prof = [round(v) for v in vals if v is not None]
-        cache[key] = prof
-        time.sleep(1.1)          # be polite: the free tier allows ~1 req/sec
-        return prof
-    except requests.RequestException:
-        return None
-
-
 # ------------------------------------------------------------------ main ---
 def main():
     if not (RAW / "hydrorivers_nepal.gpkg").exists():
@@ -135,13 +107,13 @@ def main():
     print("loading river network…")
     rivers, geom, nxt, order = load_rivers()
 
-    # curated observed paths, if any
+    # documented reach lengths, if any
     curated = {}
-    cp = RAW / "curated_paths.geojson"
+    cp = RAW / "curated_reaches.json"
     if cp.exists():
-        for f in json.loads(cp.read_text(encoding="utf-8"))["features"]:
-            curated[f["properties"]["event_id"]] = f
-        print(f"  {len(curated)} curated observed path(s)")
+        curated = {k: v for k, v in json.loads(cp.read_text(encoding="utf-8")).items()
+                   if not k.startswith("_")}
+        print(f"  {len(curated)} documented reach length(s)")
 
     # snap every significant event to its nearest reach, vectorised
     pts = gpd.GeoDataFrame(
@@ -169,29 +141,24 @@ def main():
     if pif.exists():
         pal_index = {v["palika"]: v for v in json.loads(pif.read_text(encoding="utf-8")).values()}
 
-    cache = load_cache()
     OUT.mkdir(parents=True, exist_ok=True)
     for old in OUT.glob("*.json"):
         old.unlink()
 
-    index, made, elev_done = {}, 0, 0
+    index, made = {}, 0
     for row, feat in zip(snapped.itertuples(), sig):
         p = feat["properties"]
         eid = p["id"]
-        observed = False
+        cur = curated.get(eid)
 
-        if eid in curated:
-            line_ll = shape(curated[eid]["geometry"])
-            line = gpd.GeoSeries([line_ll], crs=4326).to_crs(METRIC).iloc[0]
-            length_km = line.length / 1000.0
-            observed = True
-        else:
-            if pd.isna(getattr(row, "HYRIV_ID", None)):
-                continue
-            line, length_km = trace_downstream(
-                int(row.HYRIV_ID), geom, nxt, budget_km(p) * 1000.0, row.geometry)
-            if line is None or length_km < 0.5:
-                continue
+        if pd.isna(getattr(row, "HYRIV_ID", None)):
+            continue
+        # a documented reach length overrides the severity-based estimate
+        budget = (cur["trace_km"] if cur else budget_km(p)) * 1000.0
+        line, length_km = trace_downstream(
+            int(row.HYRIV_ID), geom, nxt, budget, row.geometry)
+        if line is None or length_km < 0.5:
+            continue
 
         # municipalities the corridor crosses
         hit, seen_pal = [], set()
@@ -211,46 +178,41 @@ def main():
                 continue
             near.append({"id": q["id"], "date": q["date"], "hazard": q["hazard"],
                          "deaths": q.get("deaths") or 0,
-                         "severity_score": q.get("severity_score") or 0})
-        near.sort(key=lambda e: e["severity_score"], reverse=True)
+                         "_s": q.get("severity_score") or 0})
+        near.sort(key=lambda e: e["_s"], reverse=True)
+        near = [{k: v for k, v in e.items() if k != "_s"} for e in near[:12]]
 
-        coords = [[round(x, 5), round(y, 5)] for x, y in
-                  gpd.GeoSeries([line], crs=METRIC).to_crs(4326).iloc[0]
-                  .simplify(0.0006, preserve_topology=True).coords]
+        simp = line.simplify(60, preserve_topology=True)      # 60 m, metric CRS
+        xs, ys = zip(*simp.coords)
+        lons, lats = TO_WGS.transform(xs, ys)
+        coords = [[round(a, 4), round(b, 4)] for a, b in zip(lons, lats)]  # ~11 m
 
         rec = {
             "event_id": eid,
-            "observed": observed,
-            "source_note": (curated[eid]["properties"].get("note") if observed
-                            else "Modelled: traced along the HydroRIVERS network from the "
-                                 "event location, for a distance scaled by the event's "
-                                 "severity. Not an observed inundation extent."),
-            "reference": curated[eid]["properties"].get("reference") if observed else None,
+            "documented_reach": bool(cur),
+            "source_note": (cur["note"] if cur
+                            else "Traced along the HydroRIVERS network from the event "
+                                 "location, for a distance scaled by the event's severity. "
+                                 "The course is the mapped river; the distance is an "
+                                 "estimate, not an observed inundation extent."),
+            "reference": cur.get("reference") if cur else None,
             "length_km": round(length_km, 1),
             "path": coords,
-            "palikas": hit[:24],
-            "nearby_events": near[:25],
+            "palikas": hit[:20],
+            "nearby_events": near,
             "nearby_total": len(near),
         }
 
-        if p.get("severity_class") in ELEV_CLASSES:
-            prof = elevation_profile(coords, cache)
-            if prof:
-                rec["elevation"] = prof
-                rec["drop_m"] = max(prof) - min(prof)
-                elev_done += 1
-
         (OUT / f"{eid}.json").write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
-        index[eid] = {"length_km": rec["length_km"], "observed": observed,
+        index[eid] = {"length_km": rec["length_km"], "documented": bool(cur),
                       "palikas": len(hit), "nearby": len(near)}
         made += 1
-        if made % 500 == 0:
+        if made % 1000 == 0:
             print(f"  {made:,} corridors…")
-            ELEV_CACHE.write_text(json.dumps(cache), encoding="utf-8")
 
     (PROCESSED / "corridors_index.json").write_text(json.dumps(index), encoding="utf-8")
-    ELEV_CACHE.write_text(json.dumps(cache), encoding="utf-8")
-    print(f"wrote {made:,} corridors ({elev_done:,} with an elevation profile)")
+    print(f"wrote {made:,} corridors")
+    print("next: python corridor_elevation.py   (adds SRTM profiles, resumable)")
 
 
 if __name__ == "__main__":
