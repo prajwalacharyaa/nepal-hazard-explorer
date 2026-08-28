@@ -208,6 +208,16 @@ def load_pop():
             for k, v in zip(df[name_c], df[val_c]) if pd.notna(v)}
 
 
+def _round_geom(o, nd=5):
+    if isinstance(o, float):
+        return round(o, nd)
+    if isinstance(o, list):
+        return [_round_geom(x, nd) for x in o]
+    if isinstance(o, dict):
+        return {k: _round_geom(v, nd) for k, v in o.items()}
+    return o
+
+
 def _i(x):
     try:
         if x is None or (isinstance(x, float) and math.isnan(x)):
@@ -292,7 +302,8 @@ def build_districts(features, gdf, pop):
             props.update(events=0, deaths=0, missing=0, injured=0, houses_destroyed=0,
                          severity_score=0.0, by_hazard={h: 0 for h in HAZARDS},
                          first_year=None, last_year=None)
-        feats.append({"type": "Feature", "geometry": row.geometry.__geo_interface__,
+        geom = row.geometry.simplify(0.002, preserve_topology=True)
+        feats.append({"type": "Feature", "geometry": _round_geom(geom.__geo_interface__),
                       "properties": props})
 
     (PROCESSED / "districts.geojson").write_text(
