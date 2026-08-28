@@ -76,10 +76,42 @@
   const slugify = (s) =>
     String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
+  /* Fetch JSON. The pages live in web/ and the data in ../data/processed, but
+     people also serve the repo with web/ as the document root — so if the
+     relative path 404s, retry once against a root-relative path before giving
+     up. Any real failure is reported by fatalError() with a fix. */
   async function loadJSON(url) {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`${r.status} ${url}`);
+    let r;
+    try {
+      r = await fetch(url);
+    } catch (e) {
+      throw new Error(`network|${url}|${e.message}`);
+    }
+    if (!r.ok && url.startsWith("../")) {
+      const alt = url.replace(/^\.\.\//, "");
+      try {
+        const r2 = await fetch(alt);
+        if (r2.ok) return r2.json();
+      } catch (e) { /* fall through to the original failure */ }
+    }
+    if (!r.ok) throw new Error(`http ${r.status}|${url}`);
     return r.json();
+  }
+
+  /* Full-screen, plain-language failure notice — a blank page should always
+     explain itself. */
+  function fatalError(title, detail, hint) {
+    if (document.getElementById("nhm-fatal")) return;
+    const el = document.createElement("div");
+    el.id = "nhm-fatal";
+    el.setAttribute("role", "alert");
+    el.innerHTML =
+      `<div class="fatal-card">
+         <h2>${title}</h2>
+         <p>${detail}</p>
+         ${hint ? `<div class="fatal-hint">${hint}</div>` : ""}
+       </div>`;
+    document.body.appendChild(el);
   }
 
   const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString());
@@ -148,6 +180,6 @@
   window.NHM = {
     DATA, HAZARD_COLORS, HAZARD_LABELS, SEV_COLORS, THEME, MAP_STYLE, paths,
     slugify, loadJSON, fmt, hazardName, readableDate, eventsToCSV, download,
-    stampMeta, toast,
+    stampMeta, toast, fatalError,
   };
 })();

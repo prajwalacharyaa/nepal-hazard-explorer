@@ -1,7 +1,17 @@
 /* Main map: 4 views + "find your area" (near-me / search / click). */
 const { HAZARD_COLORS, HAZARD_LABELS, SEV_COLORS, THEME, MAP_STYLE, paths,
         slugify, loadJSON, fmt, hazardName, readableDate, eventsToCSV, download,
-        toast } = window.NHM;
+        toast, fatalError } = window.NHM;
+
+if (location.protocol === "file:") {
+  fatalError(
+    "This page must be served over HTTP",
+    "It was opened straight from the file system, so the browser blocks it from " +
+    "reading the hazard data and the map tiles.",
+    "From the project folder run <code>python -m http.server 8000</code> " +
+    "then open <code>http://localhost:8000/web/</code>",
+  );
+}
 
 const state = {
   view: "heatmap",
@@ -20,6 +30,19 @@ const map = new maplibregl.Map({
 });
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
 map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: false }), "bottom-right");
+window.__map = map;                       // handy when debugging in the console
+
+// A blank basemap should say why rather than look like a broken page.
+let tileErrorShown = false;
+map.on("error", (e) => {
+  const msg = (e && e.error && e.error.message) || "unknown map error";
+  console.error("[map]", msg, e);
+  if (tileErrorShown) return;
+  if (/style|sprite|glyph|tiles?\.openfreemap|Failed to fetch|NetworkError/i.test(msg)) {
+    tileErrorShown = true;
+    toast("Basemap tiles could not load — check the network connection. Hazard data is unaffected.", 6000);
+  }
+});
 
 let deckOverlay = null;
 
@@ -39,8 +62,20 @@ async function loadAll() {
     .catch(() => buildPlaceIndex());
 
   if (!state.data.events) {
+    const why = String((ev.reason && ev.reason.message) || ev.reason || "");
+    const missing = why.startsWith("http 404");
     document.getElementById("stats").innerHTML =
-      "<b>No data loaded.</b><span class='sub'>Run the pipeline (see README) to build data/processed/.</span>";
+      "<b>No hazard data loaded.</b><span class='sub'>See the message on screen.</span>";
+    fatalError(
+      missing ? "Hazard data not found" : "Could not load the hazard data",
+      missing
+        ? "The page loaded, but <code>data/processed/events.geojson</code> could not be fetched."
+        : `The request for the data failed (${(why.split("|")[0] || "network error").trim()}).`,
+      "Serve the <b>project root</b> — not the <code>web/</code> folder — then open <code>/web/</code>:" +
+      "<br><code>cd landslide_flood_heatmap</code><br><code>python -m http.server 8000</code>" +
+      "<br>then visit <code>http://localhost:8000/web/</code>" +
+      "<br><br>If you have not built the data yet, run the pipeline first (see README).",
+    );
     return;
   }
   const yrs = state.data.events.features.map((f) => f.properties.year).filter(Boolean);

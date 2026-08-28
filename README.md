@@ -73,11 +73,20 @@ python fetch_nowcast.py      # -> nowcast.json         (needs EARTHDATA_TOKEN, Â
 # NASA GLC and HDX boundaries/population are optional add-ons (see DATA_SOURCES.md).
 ```
 
-Then serve **from the repo root** (so `web/` can reach `data/`):
+### Run it locally
+
+```bash
+python serve.py          # serves the repo root and opens the map for you
+```
+
+Or by hand â€” note it must be served **from the repo root**, so `web/` can reach
+`data/`, and it must be over HTTP (opening `web/index.html` by double-clicking
+gives a blank map, because the browser blocks a `file://` page from reading the
+data):
 
 ```bash
 python -m http.server 8000
-# open http://localhost:8000/web/
+# open http://localhost:8000/web/     <- not /  and not from inside web/
 ```
 
 ### Deploy to GitHub Pages
