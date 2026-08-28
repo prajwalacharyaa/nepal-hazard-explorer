@@ -86,3 +86,17 @@ Pick one:
 
 `gdalwarp` / `gdalbuildvrt` come with the `rasterio` install (GDAL) or conda's
 `gdal` package.
+
+## 7. Curated events — `data/raw/manual_events.csv`  (tracked in git)
+
+For major disasters that the automated sources miss or lag on (BIPAD can take
+days to weeks to enter a big event). One row per event; columns:
+
+`id, date, date_precision, hazard, district, lon, lat, geo_precision, deaths,
+missing, injured, people_affected, houses_destroyed, houses_damaged, title,
+source_url, report_sources, glide, notes`
+
+`clean_merge.py` reads it automatically (`source = manual`). When the automated
+source later catches up, `aggregate.py`'s spatial dedup merges the two and keeps
+the richer record. Currently holds the 2026-08-26 Langtang / Rasuwa cascade
+(ice-rock avalanche → river-dam breach → debris flow → flash flood).

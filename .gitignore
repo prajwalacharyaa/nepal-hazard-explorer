@@ -14,6 +14,8 @@ venv/
 # Comment the next line if you want to commit a frozen snapshot.
 data/raw/*
 !data/raw/.gitkeep
+# hand-curated, not re-fetchable — keep in git:
+!data/raw/manual_events.csv
 
 # Processed outputs ARE committed (GitHub Pages serves them):
 !data/processed/

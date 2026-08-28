@@ -21,8 +21,8 @@ from datetime import datetime
 import pandas as pd
 
 from config import (
-    RAW, PROCESSED, NEPAL_BBOX, HAZARD_MAP, KEEP_HAZARDS, SEVERITY_WEIGHTS,
-    severity_class,
+    RAW, PROCESSED, NEPAL_BBOX, HAZARD_MAP, HAZARDS, KEEP_HAZARDS,
+    SEVERITY_WEIGHTS, severity_class,
 )
 
 UNMAPPED: set[str] = set()
@@ -277,6 +277,54 @@ def load_desinventar() -> list[dict]:
     return rows
 
 
+# ------------------------------------------------------------- manual ------
+def load_manual() -> list[dict]:
+    """Curated records for events that the automated sources miss or lag on
+    (major disasters take days-weeks to appear in BIPAD). data/raw/manual_events.csv
+    — one row per event, same fields as the unified schema plus report_sources /
+    glide / notes. source is forced to 'manual'."""
+    f = RAW / "manual_events.csv"
+    if not f.exists():
+        print("  (skip) no manual_events.csv")
+        return []
+    df = pd.read_csv(f, dtype=str).fillna("")
+    rows = []
+    for i, r in df.iterrows():
+        raw_hz = (r.get("hazard") or "").strip()
+        hz = raw_hz if raw_hz in HAZARDS else norm_hazard(raw_hz)
+        iso, prec, yr, mo = parse_date(r.get("date"))
+        if iso is None:
+            print(f"  ! manual row {i}: bad date {r.get('date')!r} — skipped")
+            continue
+        try:
+            lon = float(r["lon"]); lat = float(r["lat"])
+        except (KeyError, ValueError):
+            lon = lat = None
+        row = blank_row()
+        row.update(
+            id=(r.get("id") or f"manual-{iso}-{hz}-{i}").strip(),
+            source="manual",
+            date=iso, date_precision=(r.get("date_precision") or prec), year=yr, month=mo,
+            hazard=hz, hazard_raw=raw_hz or None,
+            district=(r.get("district") or "").strip().title() or None,
+            lon=lon, lat=lat,
+            geo_precision=(r.get("geo_precision") or ("exact" if lon else "district_centroid")),
+            deaths=to_int(r.get("deaths")), missing=to_int(r.get("missing")),
+            injured=to_int(r.get("injured")),
+            people_affected=to_int(r.get("people_affected")),
+            houses_destroyed=to_int(r.get("houses_destroyed")),
+            houses_damaged=to_int(r.get("houses_damaged")),
+            title=(r.get("title") or raw_hz).strip(),
+            source_url=(r.get("source_url") or "").strip(),
+        )
+        row["report_sources"] = (r.get("report_sources") or "").strip() or None
+        row["glide"] = (r.get("glide") or "").strip() or None
+        row["place_detail"] = (r.get("notes") or "").strip() or None
+        rows.append(row)
+    print(f"  manual: {len(rows)} curated rows")
+    return rows
+
+
 # ---------------------------------------------------------------- dedupe ----
 def haversine_km(a, b):
     (lon1, lat1), (lon2, lat2) = a, b
@@ -335,7 +383,7 @@ def score(row) -> float:
 # ---------------------------------------------------------------- main ------
 def main():
     PROCESSED.mkdir(parents=True, exist_ok=True)
-    rows = load_bipad() + load_nasa() + load_desinventar()
+    rows = load_bipad() + load_nasa() + load_desinventar() + load_manual()
     if not rows:
         raise SystemExit("no input rows — run the fetch scripts / add manual files first")
 
