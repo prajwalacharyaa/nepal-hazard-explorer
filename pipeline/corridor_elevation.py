@@ -81,7 +81,9 @@ def main():
             continue
         if not args.all and sev.get(rec["event_id"]) not in DEFAULT_CLASSES:
             continue
-        todo.append((f, rec))
+        # store only the path; the record is re-read at write time so a corridor
+        # rebuild running alongside this pass is never clobbered with stale JSON
+        todo.append(f)
 
     print(f"{len(files):,} corridors, {len(todo):,} still need a profile"
           f"{'' if args.all else ' (major/catastrophic tier)'}")
@@ -91,9 +93,12 @@ def main():
     session = requests.Session()
     done = hits = 0
     try:
-        for f, rec in todo:
+        for f in todo:
             if args.limit and done >= args.limit:
                 break
+            rec = json.loads(f.read_text(encoding="utf-8"))   # fresh, never stale
+            if rec.get("elevation"):
+                continue
             key = cache_key(rec["path"])
             prof = cache.get(key)
             if prof is None:

@@ -150,18 +150,23 @@ function buildMap() {
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
   map.addControl(new maplibregl.ScaleControl({ maxWidth: 120 }), "bottom-left");
 
-  // Everything on this page hangs off the style being ready, so add the layers
-  // from whichever signal arrives first and never add them twice.
+  // 'load' is the only safe moment to add layers: styledata also fires *during*
+  // style loading, when isStyleLoaded() can briefly report true, and anything
+  // added then is discarded when the style finishes parsing. A late retry
+  // covers the case where 'load' was somehow missed.
   let layersAdded = false;
   const tryAddLayers = () => {
     if (layersAdded || !map.isStyleLoaded()) return;
     layersAdded = true;
-    addLayers();
+    try { addLayers(); } catch (e) { console.error("[impact] addLayers", e); }
   };
   map.on("load", tryAddLayers);
-  map.on("styledata", tryAddLayers);
-  map.on("idle", tryAddLayers);
   map.on("error", (e) => console.error("[impact map]", (e && e.error && e.error.message) || e));
+  const retry = setInterval(() => {
+    if (layersAdded) return clearInterval(retry);
+    if (map.isStyleLoaded()) tryAddLayers();
+  }, 1500);
+  setTimeout(() => clearInterval(retry), 30000);
 
   function addLayers() {
     const col = HAZARD_COLORS[EVENT.properties.hazard] || THEME.accent;
@@ -169,19 +174,47 @@ function buildMap() {
     if (CORRIDOR && CORRIDOR.path && CORRIDOR.path.length > 1) {
       const line = { type: "Feature", geometry: { type: "LineString", coordinates: CORRIDOR.path } };
       map.addSource("corridor", { type: "geojson", data: line });
-      // soft halo so the path reads over any basemap detail
-      map.addLayer({ id: "corridor-halo", type: "line", source: "corridor",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": col, "line-opacity": 0.18, "line-width":
-          ["interpolate", ["linear"], ["zoom"], 7, 8, 12, 22] } });
+
+      // The reach the event covered is shown from the moment the page opens, as
+      // a soft band rather than a bare line. Three stacked widths at falling
+      // opacity fake the gradient falloff of the density layer, so the extent
+      // reads at a glance without hiding the basemap underneath.
+      const band = [
+        ["corridor-band-3", 0.06, [7, 22, 12, 54]],
+        ["corridor-band-2", 0.10, [7, 14, 12, 34]],
+        ["corridor-band-1", 0.16, [7, 8, 12, 19]],
+      ];
+      for (const [id, opacity, w] of band) {
+        map.addLayer({ id, type: "line", source: "corridor",
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": col, "line-opacity": opacity, "line-blur":
+            ["interpolate", ["linear"], ["zoom"], 7, 4, 12, 10],
+            "line-width": ["interpolate", ["linear"], ["zoom"], ...w] } });
+      }
+
       map.addLayer({ id: "corridor-line", type: "line", source: "corridor",
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": col, "line-opacity": 0.85,
           "line-width": ["interpolate", ["linear"], ["zoom"], 7, 2.2, 12, 5],
-          // dashed when modelled, solid when observed
+          // dashed when the length is modelled, solid when it is documented
           ...(CORRIDOR.documented_reach ? {} : { "line-dasharray": [2, 1.4] }),
         } });
+
+      // explicit end-of-reach marker so the covered span reads as source -> end
+      const endPt = CORRIDOR.path[CORRIDOR.path.length - 1];
+      map.addSource("reach-end", { type: "geojson",
+        data: { type: "Feature", geometry: { type: "Point", coordinates: endPt } } });
+      map.addLayer({ id: "reach-end-ring", type: "circle", source: "reach-end",
+        paint: { "circle-radius": 6, "circle-color": "rgba(0,0,0,0)",
+          "circle-stroke-width": 2.5, "circle-stroke-color": col,
+          "circle-stroke-opacity": 0.9 } });
+      map.addLayer({ id: "reach-end-label", type: "symbol", source: "reach-end",
+        layout: { "text-field": `end of ${CORRIDOR.length_km} km reach`,
+          "text-size": 11, "text-offset": [0, 1.3], "text-anchor": "top",
+          "text-allow-overlap": false },
+        paint: { "text-color": THEME.inkDim, "text-halo-color": "#ffffff",
+          "text-halo-width": 1.6 } });
       // --- flow animation: a trail that draws in behind a travelling head ---
       map.addSource("trail", { type: "geojson", data: emptyLine() });
       map.addLayer({ id: "corridor-trail", type: "line", source: "trail",
@@ -206,7 +239,7 @@ function buildMap() {
         paint: { "text-color": col, "text-opacity": 0.75,
                  "text-halo-color": "#ffffff", "text-halo-width": 1.4 } });
 
-      fitCorridor();
+      fitCorridor(false);   // snap on open; the button animates
     }
 
     // the event itself, on top
@@ -234,7 +267,7 @@ function buildMap() {
   }, 20000);
 }
 
-function fitCorridor() {
+function fitCorridor(animate = true) {
   if (!CORRIDOR || !CORRIDOR.path.length) return;
   const b = CORRIDOR.path.reduce(
     (a, c) => [Math.min(a[0], c[0]), Math.min(a[1], c[1]),
@@ -243,7 +276,8 @@ function fitCorridor() {
   const pad = matchMedia("(min-width: 900px)").matches
     ? { top: 60, bottom: 60, left: 60, right: 420 }
     : { top: 40, bottom: 40, left: 30, right: 30 };
-  map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: pad, duration: 700, maxZoom: 12 });
+  map.fitBounds([[b[0], b[1]], [b[2], b[3]]],
+    { padding: pad, duration: animate ? 700 : 0, maxZoom: 12 });
 }
 
 /* ============================================================================
