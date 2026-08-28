@@ -216,7 +216,9 @@ function drawMonthChart(rec, mo) {
   const x = d3.scaleBand().domain(d3.range(12)).range([padL, W - 6]).padding(0.25);
   const ymax = d3.max(data, (b) => Math.max(b.hi, b.mean)) || 1;
   const y = d3.scaleLinear().domain([0, ymax]).nice().range([H - padB, padT]);
-  const svg = d3.create("svg").attr("width", W).attr("height", H).attr("font-size", 9);
+  const svg = d3.create("svg").attr("class", "chart").attr("viewBox", `0 0 ${W} ${H}`)
+    .attr("preserveAspectRatio", "xMinYMid meet").attr("font-size", 9)
+    .attr("style", `max-width:${W}px`);
 
   svg.append("g").attr("transform", `translate(0,${H - padB})`).attr("color", THEME.inkFaint)
     .call(d3.axisBottom(x).tickFormat((i) => MONTHS[i]).tickSizeOuter(0));
@@ -253,7 +255,9 @@ function drawHist(rec) {
   const W = 300, H = 90, padB = 16;
   const x = d3.scaleBand().domain(d3.range(12)).range([0, W]).padding(0.25);
   const y = d3.scaleLinear().domain([0, d3.max(share) || 1]).range([H - padB, 4]);
-  const svg = d3.create("svg").attr("width", W).attr("height", H).attr("font-size", 8);
+  const svg = d3.create("svg").attr("class", "chart").attr("viewBox", `0 0 ${W} ${H}`)
+    .attr("preserveAspectRatio", "xMinYMid meet").attr("font-size", 8)
+    .attr("style", `max-width:${W}px`);
   svg.append("g").selectAll("rect").data(share).join("rect")
     .attr("x", (_, i) => x(i)).attr("width", x.bandwidth())
     .attr("y", (v) => y(v || 0)).attr("height", (v) => H - padB - y(v || 0))

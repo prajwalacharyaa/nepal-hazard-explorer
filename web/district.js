@@ -181,7 +181,9 @@ function renderCharts() {
   const x = d3.scaleBand().domain(years).range([pad, w - 4]).padding(0.15);
   const y = d3.scaleLinear().domain([0, d3.max([...byYear.values()]) || 1]).range([h - pad, 4]);
   const ERA = 2011;
-  const svg = d3.create("svg").attr("width", w).attr("height", h).attr("font-size", 9)
+  const svg = d3.create("svg").attr("class", "chart").attr("viewBox", `0 0 ${w} ${h}`)
+    .attr("preserveAspectRatio", "xMinYMid meet").attr("font-size", 9)
+    .attr("style", `max-width:${w}px`)
     .attr("role", "img").attr("aria-label", "Recorded events per year");
   // reporting-era band: dim the under-reported pre-2011 span
   if (years[0] < ERA) {
