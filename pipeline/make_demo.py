@@ -9,10 +9,9 @@ mid-hills and major river corridors, 6 hazard types.
 from __future__ import annotations
 
 import json
-import math
 import random
 
-from config import PROCESSED, HAZARDS, SEVERITY_WEIGHTS, severity_class
+from config import PROCESSED, SEVERITY_WEIGHTS, severity_class
 
 random.seed(42)
 N = 1800

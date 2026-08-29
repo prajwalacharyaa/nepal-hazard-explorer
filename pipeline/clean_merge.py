@@ -216,6 +216,12 @@ def _desinv_date(y, m, d):
         return f"{y:04d}-{m:02d}-01", "month", y, m
 
 
+def g(el, tag):
+    """Text of a child tag, stripped, or None."""
+    t = el.findtext(tag)
+    return t.strip() if t else None
+
+
 def load_desinventar() -> list[dict]:
     xml = RAW / "desinventar_npl.xml"
     if not xml.exists():
@@ -231,25 +237,21 @@ def load_desinventar() -> list[dict]:
             el.clear()
             continue
 
-        def g(tag):
-            t = el.findtext(tag)
-            return t.strip() if t else None
-
-        raw_evt = g("evento")
+        raw_evt = g(el, "evento")
         hazard = norm_hazard(raw_evt)
-        iso, prec, yr, mo = _desinv_date(g("fechano"), g("fechames"), g("fechadia"))
+        iso, prec, yr, mo = _desinv_date(g(el, "fechano"), g(el, "fechames"), g(el, "fechadia"))
         if iso is None:
             el.clear()
             continue
 
-        lvl2 = g("level2")
-        district = (g("name1") or "").title() or None
-        village = g("name2") or None
+        lvl2 = g(el, "level2")
+        district = (g(el, "name1") or "").title() or None
+        village = g(el, "name2") or None
 
         # DesInventar `serial` is not globally unique (a handful collide);
         # `uu_id` is a proper UUID — prefer it.
-        serial = g("serial")
-        uid = g("uu_id")
+        serial = g(el, "serial")
+        uid = g(el, "uu_id")
         ev_id = f"desinventar-{uid}" if uid else f"desinventar-{serial}"
 
         row = blank_row()
@@ -260,22 +262,22 @@ def load_desinventar() -> list[dict]:
             hazard=hazard, hazard_raw=raw_evt,
             district=district,
             geo_precision="village_centroid" if lvl2 else "district_centroid",
-            deaths=to_int(g("muertos")),
-            missing=to_int(g("desaparece")),
-            injured=to_int(g("heridos")),
-            people_affected=to_int(g("afectados")) or to_int(g("damnificados")),
-            houses_destroyed=to_int(g("vivdest")),
-            houses_damaged=to_int(g("vivafec")),
+            deaths=to_int(g(el, "muertos")),
+            missing=to_int(g(el, "desaparece")),
+            injured=to_int(g(el, "heridos")),
+            people_affected=to_int(g(el, "afectados")) or to_int(g(el, "damnificados")),
+            houses_destroyed=to_int(g(el, "vivdest")),
+            houses_damaged=to_int(g(el, "vivafec")),
             title=f"{raw_evt.title()} - {village or district or 'Nepal'}",
             source_url=f"https://www.desinventar.net/DesInventar/profiletab.jsp?countrycode=npl&serial={g('serial')}",
         )
         # geo codes for centroid resolution downstream (stripped after aggregate)
-        row["_lvl1"] = g("level1")
+        row["_lvl1"] = g(el, "level1")
         row["_lvl2"] = lvl2
         # research-useful extras, kept in the output
-        row["place_detail"] = g("lugar")
-        row["report_sources"] = g("fuentes")
-        row["glide"] = g("glide")
+        row["place_detail"] = g(el, "lugar")
+        row["report_sources"] = g(el, "fuentes")
+        row["glide"] = g(el, "glide")
         rows.append(row)
         el.clear()
 

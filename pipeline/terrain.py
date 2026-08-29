@@ -1,20 +1,17 @@
-"""Server-side elevation, from the same free SRTM tiles the browser uses.
+"""SRTM elevation from the AWS terrarium tiles.
 
-The risk check reads terrain client-side from AWS "terrarium" tiles. Anything
-that wants to reason about terrain in the pipeline — travel time down a surge
-path, back-testing the score against the event record — needs the same numbers
-from the same source, or the two will quietly disagree.
+Same tiles and same maths as the browser (see anSampleTerrain in web/app.js).
+Keep them in step or the pipeline and the live check will disagree.
 
-Tiles are cached on disk under data/raw/terrain_tiles/, so a second run costs
-nothing and the build works offline once warm.
+Tiles cache under data/raw/terrain_tiles/, so repeat runs are free and work
+offline once warm.
 
-Encoding: metres = (R * 256 + G + B / 256) - 32768.
+Terrarium encoding: metres = (R * 256 + G + B / 256) - 32768.
 """
 from __future__ import annotations
 
 import math
 import threading
-from pathlib import Path
 
 import numpy as np
 

@@ -1,21 +1,14 @@
-"""Route sudden-release water hazards down the real river network.
+"""Trace where a sudden water release would actually go.
 
-The risk check needs to answer "can a surge from up there actually reach this
-spot?". A radius around a glacial lake cannot answer that — water follows
-channels, so a point 600 m up a valley side is safe while a village 40 km
-downstream on the floodplain is not.
+Buffering a glacial lake by N km is wrong: water follows channels. A point
+600 m up a valley side is fine; a village 40 km downstream on the floodplain
+is not. So walk HydroRIVERS NEXT_DOWN from each source instead.
 
-So we trace, along HydroRIVERS' NEXT_DOWN topology, the path a release would
-actually take from every known sudden-release source in Nepal:
+Sources: glacial lakes (curated CSV + the HMA inventory via glacial_lakes.py),
+and dams, weirs and hydropower from OSM.
 
-  * glacial lakes   — the curated PDGL inventory (data/raw/dangerous_lakes.csv)
-  * dams and weirs  — OpenStreetMap, via Overpass
-  * hydropower      — OpenStreetMap run-of-river and storage plants
-
-Dams matter for two reasons the user is right to raise: a dam or weir can fail,
-and an impoundment raises the stakes of anything arriving from upstream. They
-are reported separately from glacial lakes and are never presented as a
-prediction of failure — only as "a structure sits upstream of this reach".
+Dams are reported separately and never as "this will fail" — only as "a
+structure sits upstream of this reach", which is what changes the exposure.
 
 Inputs : data/raw/hydrorivers_nepal.gpkg   (fetch_rivers.py)
          data/raw/dangerous_lakes.csv
@@ -33,9 +26,7 @@ import csv
 import json
 import math
 import sys
-from pathlib import Path
 
-import geopandas as gpd
 from shapely.geometry import Point
 from shapely.ops import transform
 from pyproj import Transformer

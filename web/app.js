@@ -514,15 +514,15 @@ function renderAreaCard({ title, subtitle, slug, feats, allTime, at }) {
   if (ab && spot) ab.onclick = () => runAnalysis(spot[0], spot[1], title);
 }
 
-/* The area card knows its own title and subtitle but not always its district;
-   for a municipality the subtitle carries it ("Rasuwa district · municipality"). */
+/* The card knows its title and subtitle but not always its district — for a
+   municipality the subtitle carries it ("Rasuwa district · municipality"). */
 function a2District(subtitle, title) {
   const m = /^(.+?)\s+district/.exec(subtitle || "");
   return m ? m[1].trim() : title;
 }
 
-/* a representative point for an area: the middle of its recorded events,
-   falling back to the district polygon's centroid */
+/* Representative point for an area: mean of its events, else the polygon
+   centroid. */
 function areaCentre(slug, feats) {
   if (feats && feats.length) {
     let x = 0, y = 0, n = 0;
@@ -580,7 +580,7 @@ function hazardLegend() {
     Object.keys(HAZARD_COLORS).map((h) =>
       `<div class="row"><span class="sw" style="background:${HAZARD_COLORS[h]}"></span>${HAZARD_LABELS[h]}</div>`
     ).join("") +
-    `<div class="row" style="margin-top:8px"><span class="sw" style="border:1.5px solid ${THEME.inkGhost || "#94a3b8"};background:#fff"></span>approximate location (centroid)</div>`;
+    `<div class="row" style="margin-top:8px"><span class="sw" style="border:1.5px solid ${THEME.inkGhost || "#a79f90"};background:#fff"></span>approximate location (centroid)</div>`;
 }
 function refresh() {
   if (state.view === "heatmap") ensureEventSource();
@@ -596,13 +596,25 @@ function refresh() {
 function buildHazardChips() {
   const box = document.getElementById("hazard-filter");
   box.innerHTML = "";
-  for (const h of Object.keys(HAZARD_COLORS)) {
+
+  // Only offer hazards the loaded data actually contains. The taxonomy has
+  // seven, but BIPAD and DesInventar between them only ever emit landslide,
+  // flood and avalanche — so GLOF/debris-flow pills would filter to nothing.
+  const present = new Map();
+  for (const f of (state.data.events ? state.data.events.features : [])) {
+    const h = f.properties.hazard;
+    present.set(h, (present.get(h) || 0) + 1);
+  }
+  const shown = Object.keys(HAZARD_COLORS).filter((h) => present.has(h));
+  for (const h of shown) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "pill";
     b.style.color = HAZARD_COLORS[h];
+    b.title = `${fmt(present.get(h))} recorded`;
     b.setAttribute("aria-pressed", String(state.hazards.has(h)));
-    b.innerHTML = `<span class="dot"></span>${HAZARD_LABELS[h]}`;
+    b.innerHTML = `<span class="dot"></span>${HAZARD_LABELS[h]}` +
+      `<em class="pill-n">${fmt(present.get(h))}</em>`;
     b.onclick = () => {
       const on = !state.hazards.has(h);
       on ? state.hazards.add(h) : state.hazards.delete(h);
@@ -881,9 +893,8 @@ addEventListener("keydown", (e) => {
     setPanelHidden(true);
   }
 });
-/* Which municipality a point falls in, when the palika layer has been loaded.
-   Alerts are finer-grained than districts, so this sharpens them where it can
-   and falls back to the district where it cannot. */
+/* Municipality containing a point. Alerts are finer than districts, so use
+   this where the layer is loaded and fall back to district where it is not. */
 function palikaAt(pt) {
   const src = state.data.palikas;
   if (!src) return null;
@@ -1004,8 +1015,8 @@ map.on("mouseleave", "heat-points", () => (map.getCanvas().style.cursor = ""));
    ========================================================================= */
 const RECENT_DAYS = 14;
 const RAIN_WET_MM = 100;               // window max mm that counts as "wet" for the badge
-const RAIN_STOPS = [[0, "#eef3f7"], [15, "#e0f2fe"], [50, "#bae6fd"],
-                    [100, "#7dd3fc"], [150, "#38bdf8"], [220, "#0284c7"]];
+const RAIN_STOPS = [[0, "#eef3f7"], [15, "#e6eff2"], [50, "#c3dbe4"],
+                    [100, "#93c0d0"], [150, "#5a9fb8"], [220, "#2b7793"]];
 function rainColor(mm) {
   let c = RAIN_STOPS[0][1];
   for (const [t, col] of RAIN_STOPS) if (mm >= t) c = col;
@@ -1023,7 +1034,6 @@ function flyToDistrict(name) {
   openAreaCard(name);
 }
 let RAIN = null;
-let alertBuilt = false;
 
 function daysAgo(iso, ref) {
   return Math.round((Date.parse(ref) - Date.parse(iso)) / 86400000);
@@ -1169,33 +1179,31 @@ function toggleRainLayer(btn) {
   names.forEach((n, i) => pick.push(n, mm[i]));
   pick.push(0);
   const fillColor = ["step", pick, "rgba(0,0,0,0)",
-    15, "#e0f2fe", 50, "#bae6fd", 100, "#7dd3fc", 150, "#38bdf8", 220, "#0284c7"];
+    15, "#e6eff2", 50, "#c3dbe4", 100, "#93c0d0", 150, "#5a9fb8", 220, "#2b7793"];
   map.addSource("rain", { type: "geojson", data: state.data.districts });
   map.addLayer({ id: "rain-fill", type: "fill", source: "rain",
     paint: { "fill-color": fillColor, "fill-opacity": 0.45 } });
   map.addLayer({ id: "rain-line", type: "line", source: "rain",
     filter: ["in", ["get", "district"], ["literal", wetDistricts()]],
-    paint: { "line-color": "#0369a1", "line-width": 1.2, "line-opacity": 0.7 } });
+    paint: { "line-color": "#1f5f78", "line-width": 1.2, "line-opacity": 0.7 } });
   btn.textContent = "Hide on map";
 }
 
 
-/* =========================================================================
-   ANALYSIS OF RISK — "is this spot OK to stay tonight?"
+/* ---------------------------------------------------------------------------
+   Analysis of Risk: "is this spot OK to stay tonight?"
 
-   The honest problem with counting nearby incidents alone: a flood recorded
-   600 m away tells you nothing if you are standing 40 m above the river, and
-   a landslide record means nothing on flat ground. So this reads the actual
-   terrain under you (SRTM via free terrarium tiles) and gates every hazard
-   on whether it is physically possible where you stand:
+   Counting nearby incidents on its own is useless — a flood 600 m away means
+   nothing if you are 40 m above the river, and a landslide record means
+   nothing on flat ground. So read the terrain under the point and gate each
+   hazard on whether it can physically happen there:
 
-     height above nearest low ground  ->  can water reach me?
-     local slope + relief above       ->  can a slope fail onto me?
-     absolute elevation               ->  snow and ice at all?
+     hand (height above nearest low ground)  can water reach me?
+     slope + relief above                    can a slope fail onto me?
+     elevation                               is there snow/ice at all?
 
-   Only hazards that survive that gate contribute to the score. A transparent
-   heuristic, still not a forecast.
-   ========================================================================= */
+   Only what survives the gate scores. Heuristic, not a forecast.
+   ------------------------------------------------------------------------ */
 const AN = {
   el: document.getElementById("analysis-modal"),
   body: null,
@@ -1237,10 +1245,9 @@ function kmBetween(a, b) {
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
-const lerp = (a, b, t) => a + (b - a) * t;
 
-/* Active alerts, with expiry re-checked against the viewer's own clock so a
-   stale build shows nothing rather than something wrong. */
+/* Expiry is re-checked here against the viewer's clock: if the daily job
+   stops running we show nothing rather than a stale alert. */
 async function anLoadPalikas() {
   if (state.data.palikas) return state.data.palikas;
   try { state.data.palikas = await loadJSON(paths.palikas); }
@@ -1274,8 +1281,6 @@ function alertFor(district, palika) {
   return best;
 }
 
-const ALERT_RANK = { high: 3, elevated: 2, watch: 1 };
-
 async function anLoadClimate() {
   if (AN.climate !== undefined) return AN.climate;
   try { AN.climate = await loadJSON(`${window.NHM.DATA}/climate_context.json`); }
@@ -1303,11 +1308,9 @@ async function anLoadSurge() {
   return AN.surge;
 }
 
-/* Nearest routed release path to a point, per source kind.
-
-   This is the question a radius cannot answer: a surge follows the channel, so
-   what matters is how far you are from the route it would actually take and
-   how high you sit above it — not how far you are from the lake. */
+/* Nearest routed release path, per source kind. What matters is distance to
+   the route the water would take and height above it, not distance to the
+   lake — see pipeline/surge_paths.py. */
 function nearestSurge(lon, lat, kinds) {
   if (!AN.surge) return null;
   const degPad = 0.09;                    // ~10 km, the widest we care about
@@ -1347,10 +1350,8 @@ async function anLoadGlof() {
   return AN.glof;
 }
 
-/* ==========================================================================
-   TERRAIN — SRTM elevation from AWS "terrarium" tiles. Free, no key, CORS
-   enabled. Encoding: metres = (R*256 + G + B/256) - 32768.
-   ========================================================================== */
+/* SRTM elevation from AWS terrarium tiles. Free, no key, CORS enabled.
+   metres = (R*256 + G + B/256) - 32768. Mirrored in pipeline/terrain.py. */
 const TERRAIN_Z = 12;                    // ~33 m/px at Nepal's latitude
 const TERRAIN_URL = (z, x, y) =>
   `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
@@ -1501,13 +1502,11 @@ function anTerrainStats(t) {
   };
 }
 
-/* How much snow and ice sits in the ground above you.
+/* Is there snow and ice in the ground above this point?
 
-   This is the link between a warming climate and your spot: meltwater, growing
-   moraine-dammed lakes and thawing frozen ground all originate on the high
-   terrain upstream. A coarse elevation sample over ~18 km answers "is there a
-   cryosphere above me at all?", which decides whether the warming numbers are
-   relevant here or merely true in general. */
+   Decides whether the warming numbers apply here or are just true in general.
+   Coarse sample over ~18 km, because melt arrives from the catchment, not from
+   the 4 km box the main terrain read uses. */
 const ICE_M = 5000;        // roughly permanent snow/ice in the Nepal Himalaya
 const SNOW_M = 4000;       // seasonal snow, and where thawing ground matters
 
@@ -1534,11 +1533,8 @@ function anCryosphere(t) {
   };
 }
 
-/* ==========================================================================
-   SCORING
-   Each hazard gets its own search radius (physics differs) and a 0-1
-   plausibility gate from the terrain. History only counts once it passes.
-   ========================================================================== */
+/* Each hazard gets its own radius (the physics differs) plus a 0-1 terrain
+   gate. Recorded history only counts after it clears the gate. */
 const HAZ_RADIUS_KM = {          // how far away a record still says something
   landslide: 2.0,
   debris_flow: 2.5,
@@ -1550,11 +1546,11 @@ const HAZ_RADIUS_KM = {          // how far away a record still says something
 };
 const CONTEXT_KM = 8;            // what the mini-map shows
 
-/* Terrain read per hazard:
-     p    — plausibility 0..1, gates whether nearby history counts at all
-     base — intrinsic susceptibility 0..1 from the landform itself, so a
-            30° slope is flagged even where nobody happened to file a report
-     why  — the sentence shown to the user */
+/* Per hazard:
+     p     0..1 plausibility, gates whether nearby history counts
+     base  0..1 from the landform alone, so a 30 deg slope is flagged even
+           where nobody filed a report
+     why   the sentence shown in the panel */
 function anGate(hz, T) {
   if (!T) return { p: 0.65, base: 0, why: "terrain unknown" };
 
@@ -1776,10 +1772,10 @@ function analysePoint(lon, lat, T) {
   const shown = Math.max(risk, floor);
 
   const band =
-    shown < 18 ? { k: "low", label: "Looks safe", col: "#16a34a" } :
+    shown < 18 ? { k: "low", label: "Looks safe", col: "#3f7d55" } :
     shown < 40 ? { k: "watch", label: "Mostly fine", col: "#65a30d" } :
-    shown < 62 ? { k: "care", label: "Take care", col: "#ea580c" } :
-                 { k: "high", label: "High concern", col: "#b91c1c" };
+    shown < 62 ? { k: "care", label: "Take care", col: "#c05f2b" } :
+                 { k: "high", label: "High concern", col: "#9b2a24" };
 
   // ---- one-line verdict, written from the terrain -----------------------
   let verdict;
@@ -1879,8 +1875,9 @@ async function runAnalysis(lon, lat, placeLabel) {
   setTimeout(() => renderAnalysis(analysePoint(lon, lat, T)), 260);
 }
 
-/* dam_release is our own synthetic hazard, so it needs its own label/colour */
-/* Travel time, phrased so nobody reads it as a countdown. */
+/* dam_release is ours, not a hazard type from the data, so it needs its own
+   label and colour */
+/* Deliberately vague wording — this must not read as a countdown. */
 function anWarning(min) {
   if (min == null) return "";
   if (min < 10) return "under 10 minutes";
@@ -1890,10 +1887,9 @@ function anWarning(min) {
 }
 
 const anHazLabel = (hz) => hz === "dam_release" ? "Dam or weir release" : hazardName(hz);
-const anHazColor = (hz) => hz === "dam_release" ? "#7c3aed" : (HAZARD_COLORS[hz] || "#888");
+const anHazColor = (hz) => hz === "dam_release" ? "#5c5fa8" : (HAZARD_COLORS[hz] || "#888");
 
-/* "how could this actually happen here" — the chain of events, named. The
-   user's question was not just how likely, but by what route. */
+/* The chain of events by name — not just how likely, but by what route. */
 function anMechanism(h, d) {
   const T = d.T;
   switch (h.hz) {
@@ -1949,14 +1945,13 @@ function anMechanism(h, d) {
 }
 
 function facChip(f) {
-  const dot = { low: "#16a34a", med: "#d97706", high: "#b91c1c", "n/a": "#94a3b8" }[f.lvl];
+  const dot = { low: "#3f7d55", med: "#bd8526", high: "#9b2a24", "n/a": "#a79f90" }[f.lvl];
   return '<div class="an-fac"><span class="an-fac-dot" style="background:' + dot + '"></span>' +
     '<span class="an-fac-k">' + f.key + '</span>' +
     '<span class="an-fac-t">' + f.text + '</span></div>';
 }
 
-/* "Why this is changing" — the warming context, but only stated where it is
-   actually relevant to this spot, and never dressed up as a prediction. */
+/* Warming context, shown only where it is relevant to this spot. */
 function anClimateSection(d) {
   const C = d.climate;
   if (!C || !C.warming) return "";
@@ -2218,9 +2213,9 @@ function buildAnMiniMap(d) {
 
     m.addSource("an-ring", { type: "geojson", data: ring });
     m.addLayer({ id: "an-ring-f", type: "fill", source: "an-ring",
-      paint: { "fill-color": "#c2410c", "fill-opacity": 0.06 } }, under);
+      paint: { "fill-color": "#1d6a66", "fill-opacity": 0.06 } }, under);
     m.addLayer({ id: "an-ring-l", type: "line", source: "an-ring",
-      paint: { "line-color": "#c2410c", "line-opacity": 0.5, "line-width": 1.4,
+      paint: { "line-color": "#1d6a66", "line-opacity": 0.5, "line-width": 1.4,
         "line-dasharray": [2, 2] } }, under);
 
     // the routed release paths, so "it could come from up there" is shown
@@ -2233,7 +2228,7 @@ function buildAnMiniMap(d) {
       routes.push({ id: S.src.id, name: S.src.name, kind: S.src.kind, path: S.src.path });
     }
     if (routes.length) {
-      const routeCol = ["match", ["get", "kind"], "glacial_lake", "#8a4f7d", "#7c3aed"];
+      const routeCol = ["match", ["get", "kind"], "glacial_lake", "#7a55a3", "#5c5fa8"];
       m.addSource("an-surge", { type: "geojson", data: {
         type: "FeatureCollection",
         features: routes.map((r) => ({
@@ -2254,7 +2249,7 @@ function buildAnMiniMap(d) {
         layout: { "symbol-placement": "line-center",
           "text-field": ["concat", ["get", "name"], " route"],
           "text-size": 10.5, "text-font": ["Noto Sans Medium"] },
-        paint: { "text-color": "#6b21a8", "text-halo-color": "#ffffff",
+        paint: { "text-color": "#4a3d80", "text-halo-color": "#ffffff",
           "text-halo-width": 1.8 } });
     }
 
@@ -2281,9 +2276,9 @@ function buildAnMiniMap(d) {
     m.addSource("an-me", { type: "geojson",
       data: { type: "Feature", geometry: { type: "Point", coordinates: d.here } } });
     m.addLayer({ id: "an-me-h", type: "circle", source: "an-me",
-      paint: { "circle-radius": 13, "circle-color": "#0f172a", "circle-opacity": 0.14 } });
+      paint: { "circle-radius": 13, "circle-color": "#23201b", "circle-opacity": 0.14 } });
     m.addLayer({ id: "an-me", type: "circle", source: "an-me",
-      paint: { "circle-radius": 6, "circle-color": "#0f172a",
+      paint: { "circle-radius": 6, "circle-color": "#23201b",
         "circle-stroke-width": 3, "circle-stroke-color": "#fff" } });
 
     setTimeout(() => { try { m.resize(); } catch (e) {} }, 60);

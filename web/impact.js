@@ -225,10 +225,9 @@ function buildMap() {
   map.addControl(new maplibregl.ScaleControl({ maxWidth: 120 }), "bottom-left");
   map.on("dragstart", collapseSheet);
 
-  // 'load' is the only safe moment to add layers: styledata also fires *during*
-  // style loading, when isStyleLoaded() can briefly report true, and anything
-  // added then is discarded when the style finishes parsing. A late retry
-  // covers the case where 'load' was somehow missed.
+  // Add layers on 'load' only. styledata also fires *during* style load, when
+  // isStyleLoaded() briefly returns true, and layers added then get thrown away
+  // when parsing finishes. The interval is a belt-and-braces retry.
   let layersAdded = false;
   const tryAddLayers = () => {
     if (layersAdded || !map.isStyleLoaded()) return;
@@ -251,10 +250,8 @@ function buildMap() {
       const line = { type: "Feature", geometry: { type: "LineString", coordinates: CORRIDOR.path } };
       map.addSource("corridor", { type: "geojson", data: line });
 
-      // The reach the event covered is shown from the moment the page opens, as
-      // a soft band rather than a bare line. Three stacked widths at falling
-      // opacity fake the gradient falloff of the density layer, so the extent
-      // reads at a glance without hiding the basemap underneath.
+      // Three stacked widths at falling opacity fake a gradient falloff, so the
+      // reach reads at a glance without a hard line hiding the basemap.
       const band = [
         ["corridor-band-3", 0.06, [7, 22, 12, 54]],
         ["corridor-band-2", 0.10, [7, 14, 12, 34]],
@@ -277,9 +274,9 @@ function buildMap() {
           ...(CORRIDOR.documented_reach ? {} : { "line-dasharray": [2, 1.4] }),
         } });
 
-      // Overland link from the event to the nearest mapped river. Drawn thin
-      // and dotted because it is a straight-line stand-in, not a channel:
-      // HydroRIVERS omits streams below its drainage threshold.
+      // Straight-line stand-in from the event to the nearest mapped river.
+      // Dotted because it is not a channel — HydroRIVERS drops streams below
+      // its drainage threshold, so the real route is simply not mapped.
       if (CORRIDOR.connector && CORRIDOR.snap_km > 0.05) {
         map.addSource("connector", { type: "geojson", data: {
           type: "Feature",
@@ -309,7 +306,7 @@ function buildMap() {
       map.addSource("trail", { type: "geojson", data: emptyLine() });
       map.addLayer({ id: "corridor-trail", type: "line", source: "trail",
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": "#0f172a", "line-opacity": 0.9,
+        paint: { "line-color": "#23201b", "line-opacity": 0.9,
           "line-width": ["interpolate", ["linear"], ["zoom"], 7, 4, 12, 8] } });
 
       map.addSource("head", { type: "geojson", data: emptyPoint() });
@@ -318,7 +315,7 @@ function buildMap() {
         paint: { "circle-radius": 18, "circle-color": col, "circle-opacity": 0.22 } });
       map.addLayer({ id: "head-dot", type: "circle", source: "head",
         layout: { visibility: "none" },
-        paint: { "circle-radius": 7, "circle-color": "#0f172a",
+        paint: { "circle-radius": 7, "circle-color": "#23201b",
           "circle-stroke-width": 3, "circle-stroke-color": "#ffffff" } });
 
       // direction arrows along the path
@@ -360,10 +357,9 @@ function buildMap() {
   }, 20000);
 }
 
-/* Name the municipalities the corridor runs through, from our own boundary
-   file. The basemap only starts drawing village names around z9, but a 100 km
-   corridor is framed well below that — and these are precisely the places a
-   reader needs named. Drawn as a labelled point at each unit's centroid. */
+/* Label the municipalities the corridor crosses, from our own boundaries.
+   Positron only draws village names from z9 and a 100 km corridor frames well
+   below that, so we cannot rely on the basemap for the names that matter. */
 function addCorridorPlaceLabels() {
   if (!CORRIDOR || !(CORRIDOR.palikas || []).length) return;
   const want = new Map();
@@ -422,7 +418,7 @@ function addCorridorPlaceLabels() {
     .catch(() => { /* labels are a bonus, never block the map on them */ });
 }
 
-/* area-weighted centroid without pulling in turf on this page */
+/* Largest-ring centroid. Avoids pulling turf into this page for one call. */
 function turfCentroid(geom) {
   const rings = geom.type === "Polygon" ? [geom.coordinates]
     : geom.type === "MultiPolygon" ? geom.coordinates : null;
@@ -454,12 +450,9 @@ function fitCorridor(animate = true) {
     { padding: pad, duration: animate ? 700 : 0, maxZoom: 12 });
 }
 
-/* ============================================================================
-   FLOW ANIMATION
-   A marker travels from the source to the end of the reach while the trail
-   draws in behind it. (An earlier version animated a white dash pattern, which
-   was invisible against a light basemap.)
-   ========================================================================== */
+/* Flow animation: a head travels source -> end with the trail drawing in
+   behind it. An earlier version animated a dash pattern instead, which was
+   invisible on a light basemap. */
 const emptyLine = () => ({ type: "Feature", geometry: { type: "LineString", coordinates: [] } });
 const emptyPoint = () => ({ type: "Feature", geometry: { type: "Point", coordinates: [0, 0] } });
 
@@ -503,15 +496,6 @@ function stopFlow() {
   document.getElementById("i-play").textContent = "▶ Play flow";
 }
 
-function resetFlow() {
-  stopFlow();
-  if (map.getSource("trail")) map.getSource("trail").setData(emptyLine());
-  if (map.getSource("head")) map.getSource("head").setData(emptyPoint());
-  if (map.getLayer("head-dot")) {
-    map.setLayoutProperty("head-dot", "visibility", "none");
-    map.setLayoutProperty("head-pulse", "visibility", "none");
-  }
-}
 
 function startFlow() {
   if (anim) return;

@@ -25,11 +25,10 @@ Outputs: data/processed/corridors/<event id>.json
 from __future__ import annotations
 
 import json
-from collections import defaultdict
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import LineString, Point, shape
+from shapely.geometry import Point
 from shapely.ops import linemerge, substring
 from shapely.strtree import STRtree
 from pyproj import Transformer
