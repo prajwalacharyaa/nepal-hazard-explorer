@@ -19,5 +19,8 @@ data/raw/*
 !data/raw/dangerous_lakes.csv
 !data/raw/curated_reaches.json
 
-# Processed outputs ARE committed (GitHub Pages serves them):
+# Processed outputs ARE committed: Pages serves them directly and they double
+# as the project's read-only API. ~39 MB, and data/processed/corridors/ is
+# 4,617 small files — slow to clone, but it means the site needs no server and
+# no pipeline run to work.
 !data/processed/
