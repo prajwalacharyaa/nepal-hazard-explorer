@@ -42,6 +42,13 @@
       </div>
       <div id="stats" aria-live="polite"></div>
 
+      <label class="switch">
+        <input type="checkbox" id="precise-only" />
+        <span class="txt">Precise locations only
+          <small>Older records sit on a village or district centroid — those show as hollow rings.</small>
+        </span>
+      </label>
+
       <div class="field">
         <span class="field-label" id="find-label">Find your area</span>
         <button id="near-me" class="btn btn-primary" type="button">
@@ -74,12 +81,6 @@
       </div>
 
 
-      <label class="switch">
-        <input type="checkbox" id="precise-only" />
-        <span class="txt">Precise locations only
-          <small>Older records sit on a village or district centroid — those show as hollow rings.</small>
-        </span>
-      </label>
 
       <div class="field" id="heat-group">
         <span class="field-label">Density strength <b id="heat-label">1.0×</b></span>

@@ -888,10 +888,13 @@ button.secondary:hover, a.secondary:hover { background: var(--surface-2); text-d
 .card p { margin: 3px 0; font-size: 12.5px; color: var(--ink-dim); }
 .card .big { font-size: 24px; font-weight: 680; letter-spacing: -0.03em; margin: 0 0 2px; color: var(--ink); font-variant-numeric: tabular-nums; }
 
-.split { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: start; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.split > * { min-width: 0; }
 @media (min-width: 860px) { .split { grid-template-columns: 1fr 1fr; } }
 .mini-map {
   height: 340px;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--hair);
   border-radius: 12px;
   overflow: hidden;
@@ -905,20 +908,44 @@ button.secondary:hover, a.secondary:hover { background: var(--surface-2); text-d
 .facts {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 9px 20px;
+  gap: 10px 20px;
   font-size: 13.5px;
   margin: 0;
   align-items: baseline;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
 }
 .facts dt { color: var(--ink-faint); font-size: 12.5px; }
-.facts dd { margin: 0; color: var(--ink); }
-@media (max-width: 520px) {
-  .facts { grid-template-columns: 1fr; gap: 2px; }
-  .facts dd { margin-bottom: 10px; }
+.facts dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .facts {
+    grid-template-columns: minmax(0, auto) 1fr;
+    gap: 0;
+    padding: 4px 16px;
+  }
+  .facts dt {
+    padding: 11px 14px 11px 0;
+    align-self: center;
+    white-space: nowrap;
+  }
+  .facts dd {
+    padding: 11px 0;
+    align-self: center;
+    text-align: right;
+    font-weight: 550;
+  }
+  .facts > * { border-top: 1px solid var(--hair); min-width: 0; }
+  .facts > :nth-child(1), .facts > :nth-child(2) { border-top: 0; }
+  .facts dd { word-break: break-word; }
 }
 
 .cite {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   background: var(--surface-2);
   border: 1px solid var(--hair);
   border-radius: 10px;
