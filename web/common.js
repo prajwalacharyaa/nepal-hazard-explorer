@@ -179,15 +179,46 @@
   // settlement labels worth keeping, even though they match nothing above
   const KEEP_LABEL = /country|state|continent|city|town|village|place|water_name|waterway_name/i;
 
+  /* Settlement label layers, with the zoom the default style first shows them.
+     Villages at z9 and minor places at z8 means a map framed on a 100 km river
+     corridor carries almost no names at all — which is exactly when knowing
+     the settlements matters most. `denseLabels` pulls those thresholds down to
+     where the vector tiles actually start carrying the data, and tightens
+     label padding so fewer get culled for collision. */
+  const PLACE_LABELS = {
+    label_other: 7, label_village: 7, label_town: 5, label_city: 3,
+    label_city_capital: 3, label_state: 5,
+  };
+
+  function denseLabels(map) {
+    for (const [id, minz] of Object.entries(PLACE_LABELS)) {
+      if (!map.getLayer(id)) continue;
+      try {
+        map.setLayerZoomRange(id, minz, 24);
+        map.setLayoutProperty(id, "text-padding", 1);
+        map.setLayoutProperty(id, "text-optional", false);
+      } catch (e) { /* layer not ours; skip */ }
+    }
+    // river and stream names orient you along a corridor
+    for (const id of ["water_name_point_label", "water_name_line_label",
+                      "waterway_line_label"]) {
+      if (!map.getLayer(id)) continue;
+      try { map.setLayerZoomRange(id, 7, 24); } catch (e) { /* skip */ }
+    }
+  }
+
   function simplifyBasemap(map, opts = {}) {
     const layers = (map.getStyle() && map.getStyle().layers) || [];
     for (const l of layers) {
       const id = l.id || "";
       if (KEEP_LABEL.test(id)) continue;
+      // road *names* help you place yourself; road casings are the clutter
+      if (opts.roadNames && /^highway-name|road_shield|highway-shield/.test(id)) continue;
       if (CLUTTER.test(id)) {
         try { map.setLayoutProperty(id, "visibility", "none"); } catch (e) { /* not ours */ }
       }
     }
+    if (opts.denseLabels) denseLabels(map);
     if (opts.mask !== false) addNepalMask(map);
     if (opts.foreignLabels !== true) hideForeignLabels(map);
   }

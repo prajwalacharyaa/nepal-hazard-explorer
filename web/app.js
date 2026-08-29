@@ -1166,6 +1166,7 @@ const AN = {
   open: false,
   mini: null,        // the modal's own MapLibre instance
   glof: undefined,   // cached glof.json (null once fetched-and-missing)
+  corr: undefined,   // cached corridors_index.json
 };
 AN.body = AN.el.querySelector(".an-body");
 
@@ -1198,6 +1199,13 @@ function kmBetween(a, b) {
 }
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const lerp = (a, b, t) => a + (b - a) * t;
+
+async function anLoadCorridors() {
+  if (AN.corr !== undefined) return AN.corr;
+  try { AN.corr = await loadJSON(`${window.NHM.DATA}/corridors_index.json`); }
+  catch (e) { AN.corr = null; }
+  return AN.corr;
+}
 
 async function anLoadGlof() {
   if (AN.glof !== undefined) return AN.glof;
@@ -1594,7 +1602,7 @@ async function runAnalysis(lon, lat, placeLabel) {
   } catch (e) { T = null; }
 
   set("Reading rain over the last few days…", 58);
-  await anLoadGlof();
+  await Promise.all([anLoadGlof(), anLoadCorridors()]);
   await new Promise((r) => setTimeout(r, 240));
 
   set("Matching hazards to your slope and height…", 82);
@@ -1648,9 +1656,16 @@ function renderAnalysis(d) {
     ? recentSrc.map((n) => {
         const p = n.p;
         const col = HAZARD_COLORS[p.hazard] || "#888";
-        const href = 'event.html?id=' + encodeURIComponent(p.id) +
+        // the impact view is the richer destination — zoomed map, downstream
+        // corridor and flow animation — so prefer it wherever one was traced
+        const hasCorr = AN.corr && AN.corr[p.id];
+        const page = hasCorr ? 'impact.html' : 'event.html';
+        const href = page + '?id=' + encodeURIComponent(p.id) +
           '&d=' + slugify(p.district || "");
-        return '<li><a href="' + href + '" title="Open this record">' +
+        const tip = hasCorr
+          ? 'Open the full view: map, ' + AN.corr[p.id].length_km + ' km corridor and flow animation'
+          : 'Open this record';
+        return '<li><a href="' + href + '" target="_blank" rel="noopener" title="' + tip + '">' +
           '<span class="anr-dot" style="background:' + col + '"></span>' +
           '<span class="anr-main">' +
             '<span class="anr-haz" style="color:' + col + '">' + hazardName(p.hazard) + '</span>' +
@@ -1658,7 +1673,7 @@ function renderAnalysis(d) {
             (p.deaths ? ' · ' + fmt(p.deaths) + ' dead' : "") + '</span>' +
           '</span>' +
           '<span class="anr-km">' + n.km.toFixed(1) + '<i>km</i></span>' +
-          '<span class="anr-go"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" ' +
+          '<span class="anr-go" title="' + tip + '"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" ' +
             'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" ' +
             'stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>' +
         '</a></li>';

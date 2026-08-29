@@ -333,6 +333,8 @@ function buildMap() {
       autoPlayFlow();
     }
 
+    addCorridorPlaceLabels();
+
     // the event itself, on top
     map.addSource("src", { type: "geojson", data: EVENT });
     map.addLayer({ id: "src-halo", type: "circle", source: "src",
@@ -356,6 +358,87 @@ function buildMap() {
       toast("The basemap did not load, so the corridor cannot be drawn. The details on the right are unaffected.", 8000);
     }
   }, 20000);
+}
+
+/* Name the municipalities the corridor runs through, from our own boundary
+   file. The basemap only starts drawing village names around z9, but a 100 km
+   corridor is framed well below that — and these are precisely the places a
+   reader needs named. Drawn as a labelled point at each unit's centroid. */
+function addCorridorPlaceLabels() {
+  if (!CORRIDOR || !(CORRIDOR.palikas || []).length) return;
+  const want = new Map();
+  for (const p of CORRIDOR.palikas) want.set(`${p.palika}|${p.district}`, p);
+
+  fetch(`${window.NHM.DATA}/palikas.geojson`)
+    .then((r) => (r.ok ? r.json() : Promise.reject()))
+    .then((fc) => {
+      if (!map || map.getSource("corridor-places")) return;
+      const feats = [];
+      for (const f of fc.features) {
+        const key = `${f.properties.adm3_name}|${f.properties.adm2_name}`;
+        const rec = want.get(key);
+        if (!rec) continue;
+        let pt;
+        try { pt = turfCentroid(f.geometry); } catch (e) { continue; }
+        if (!pt) continue;
+        feats.push({
+          type: "Feature", geometry: { type: "Point", coordinates: pt },
+          properties: {
+            name: f.properties.adm3_name,
+            sub: `${f.properties.adm2_name} district`,
+            events: rec.events || 0,
+          },
+        });
+      }
+      if (!feats.length) return;
+      map.addSource("corridor-places", {
+        type: "geojson", data: { type: "FeatureCollection", features: feats } });
+      map.addLayer({ id: "corridor-place-dot", type: "circle", source: "corridor-places",
+        paint: { "circle-radius": 3.2, "circle-color": "#ffffff",
+          "circle-stroke-width": 1.6, "circle-stroke-color": THEME.inkDim,
+          "circle-opacity": 0.95 } });
+      map.addLayer({ id: "corridor-place-label", type: "symbol", source: "corridor-places",
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 7, 10.5, 12, 13],
+          "text-offset": [0, 0.9], "text-anchor": "top",
+          "text-allow-overlap": false, "text-padding": 1,
+          "text-font": ["Noto Sans Medium"],
+        },
+        paint: { "text-color": THEME.ink, "text-halo-color": "#ffffff",
+          "text-halo-width": 1.8 } });
+
+      map.on("click", "corridor-place-dot", (e) => {
+        const p = e.features[0].properties;
+        new maplibregl.Popup().setLngLat(e.lngLat)
+          .setHTML(`<b>${p.name}</b><br>${p.sub}` +
+            (p.events ? `<br>${p.events} recorded events` : "")).addTo(map);
+      });
+      map.on("mouseenter", "corridor-place-dot",
+        () => (map.getCanvas().style.cursor = "pointer"));
+      map.on("mouseleave", "corridor-place-dot",
+        () => (map.getCanvas().style.cursor = ""));
+    })
+    .catch(() => { /* labels are a bonus, never block the map on them */ });
+}
+
+/* area-weighted centroid without pulling in turf on this page */
+function turfCentroid(geom) {
+  const rings = geom.type === "Polygon" ? [geom.coordinates]
+    : geom.type === "MultiPolygon" ? geom.coordinates : null;
+  if (!rings) return null;
+  let bestA = -1, best = null;
+  for (const poly of rings) {
+    const ring = poly[0];
+    let a = 0, x = 0, y = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const f = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+      a += f; x += (ring[j][0] + ring[i][0]) * f; y += (ring[j][1] + ring[i][1]) * f;
+    }
+    a *= 0.5;
+    if (Math.abs(a) > bestA && a !== 0) { bestA = Math.abs(a); best = [x / (6 * a), y / (6 * a)]; }
+  }
+  return best;
 }
 
 function fitCorridor(animate = true) {
