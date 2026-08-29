@@ -376,13 +376,21 @@ async function ensurePalikaLayer() {
 map.on("zoomend", () => { if (map.getZoom() >= 7.8) ensurePalikaLayer(); });
 
 function openPalikaCard(pcode, name, lngLat) {
-  state.openArea = { kind: "palika", pcode, name };
+  state.openArea = { kind: "palika", pcode, name, at: anLngLat(lngLat) };
   renderOpenArea();
+}
+
+/* normalise whatever the caller had: a MapLibre LngLat, a pair, or nothing */
+function anLngLat(l) {
+  if (!l) return null;
+  if (Array.isArray(l)) return [l[0], l[1]];
+  if (typeof l.lng === "number") return [l.lng, l.lat];
+  return null;
 }
 
 /* ------------------------------------------------------------ area card --- */
 function openAreaCard(district, lngLat) {
-  state.openArea = { kind: "district", district };
+  state.openArea = { kind: "district", district, at: anLngLat(lngLat) };
   renderOpenArea();
 }
 
@@ -395,6 +403,7 @@ function renderOpenArea() {
   if (a.kind === "palika") {
     const ix = state.data.palikaIndex && state.data.palikaIndex[a.pcode];
     renderAreaCard({
+      at: a.at,
       title: ix ? ix.palika : a.name,
       subtitle: `${ix ? ix.district + " district · " : ""}municipality`,
       slug: ix ? slugify(ix.district) : slugify(a.name),
@@ -404,6 +413,7 @@ function renderOpenArea() {
   } else {
     const ix = state.data.index && state.data.index[a.district];
     renderAreaCard({
+      at: a.at,
       title: a.district, subtitle: "district", slug: slugify(a.district),
       feats: filteredEvents().filter((f) => f.properties.district === a.district),
       allTime: ix,
@@ -417,7 +427,7 @@ function closeAreaCard() {
 }
 
 /* stats for whatever is currently filtered, plus an all-time context line */
-function renderAreaCard({ title, subtitle, slug, feats, allTime }) {
+function renderAreaCard({ title, subtitle, slug, feats, allTime, at }) {
   const card = document.getElementById("area-card");
   const rangeTxt = `${state.yearMin}–${state.yearMax}`;
   const isFull = state.yearMin === state.absMin && state.yearMax === state.absMax
@@ -461,9 +471,20 @@ function renderAreaCard({ title, subtitle, slug, feats, allTime }) {
          </svg>Full view</a>`
     : "";
 
+  // analysing a place the user tapped uses that exact point; the area's own
+  // centre keeps the button useful when the card was opened from a search
+  const spot = at || areaCentre(slug, feats);
+  const analyseBtn = spot
+    ? `<button class="ac-analyse" type="button" title="Analyse hazard risk at this spot">
+         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+           <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/>
+         </svg>Analyse</button>`
+    : "";
+
   const firstOpen = card.hidden;
   card.innerHTML = `<button class="x" aria-label="Close">×</button>
-    <h3>${title}</h3>
+    <div class="ac-title"><h3>${title}</h3>${analyseBtn}</div>
     <p class="muted">${subtitle}</p>
     ${body}
     <div class="cta-row">
@@ -475,6 +496,25 @@ function renderAreaCard({ title, subtitle, slug, feats, allTime }) {
   // every filter-driven refresh
   if (firstOpen && typeof collapsePanel === "function") collapsePanel();
   card.querySelector(".x").onclick = closeAreaCard;
+  const ab = card.querySelector(".ac-analyse");
+  if (ab && spot) ab.onclick = () => runAnalysis(spot[0], spot[1], title);
+}
+
+/* a representative point for an area: the middle of its recorded events,
+   falling back to the district polygon's centroid */
+function areaCentre(slug, feats) {
+  if (feats && feats.length) {
+    let x = 0, y = 0, n = 0;
+    for (const f of feats) {
+      if (!f.geometry) continue;
+      x += f.geometry.coordinates[0]; y += f.geometry.coordinates[1]; n++;
+    }
+    if (n) return [x / n, y / n];
+  }
+  const d = (state.data.districts && state.data.districts.features || [])
+    .find((f) => slugify(f.properties.district) === slug);
+  if (d) { try { return turf.centroid(d).geometry.coordinates; } catch (e) {} }
+  return null;
 }
 
 /* year + hazard filter as a URL suffix, so a click-through stays consistent */
@@ -1105,11 +1145,20 @@ function toggleRainLayer(btn) {
 
 
 /* =========================================================================
-   ANALYSIS OF RISK — a local "is this spot OK to stay tonight?" check.
-   Everything is measured within a few km of where you are standing, not at
-   district scale: recent incidents right here, rain falling now, and whether
-   this place sits on a glacial-lake outburst path. A transparent heuristic,
-   not a forecast.
+   ANALYSIS OF RISK — "is this spot OK to stay tonight?"
+
+   The honest problem with counting nearby incidents alone: a flood recorded
+   600 m away tells you nothing if you are standing 40 m above the river, and
+   a landslide record means nothing on flat ground. So this reads the actual
+   terrain under you (SRTM via free terrarium tiles) and gates every hazard
+   on whether it is physically possible where you stand:
+
+     height above nearest low ground  ->  can water reach me?
+     local slope + relief above       ->  can a slope fail onto me?
+     absolute elevation               ->  snow and ice at all?
+
+   Only hazards that survive that gate contribute to the score. A transparent
+   heuristic, still not a forecast.
    ========================================================================= */
 const AN = {
   el: document.getElementById("analysis-modal"),
@@ -1148,6 +1197,7 @@ function kmBetween(a, b) {
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
+const lerp = (a, b, t) => a + (b - a) * t;
 
 async function anLoadGlof() {
   if (AN.glof !== undefined) return AN.glof;
@@ -1158,31 +1208,247 @@ async function anLoadGlof() {
   return AN.glof;
 }
 
-/* ---- the local computation ------------------------------------------------ */
-const LOCAL_KM = 5;      // "right here"
-const CONTEXT_KM = 15;   // what the mini-map shows
+/* ==========================================================================
+   TERRAIN — SRTM elevation from AWS "terrarium" tiles. Free, no key, CORS
+   enabled. Encoding: metres = (R*256 + G + B/256) - 32768.
+   ========================================================================== */
+const TERRAIN_Z = 12;                    // ~33 m/px at Nepal's latitude
+const TERRAIN_URL = (z, x, y) =>
+  `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
 
-function analysePoint(lon, lat) {
+const lon2tile = (lon, z) => (lon + 180) / 360 * Math.pow(2, z);
+const lat2tile = (lat, z) => {
+  const r = lat * Math.PI / 180;
+  return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z);
+};
+
+const anTileCache = new Map();
+function anLoadTile(z, x, y) {
+  const key = `${z}/${x}/${y}`;
+  if (anTileCache.has(key)) return anTileCache.get(key);
+  const p = new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = c.height = 256;
+        const ctx = c.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+        resolve(ctx.getImageData(0, 0, 256, 256).data);
+      } catch (e) { resolve(null); }        // tainted or decode failure
+    };
+    img.onerror = () => resolve(null);
+    img.src = TERRAIN_URL(z, x, y);
+  });
+  anTileCache.set(key, p);
+  return p;
+}
+
+/* Sample a square of terrain centred on (lon,lat).
+   halfKm = half the box width. Returns { grid, mPerCell, n } or null. */
+async function anSampleTerrain(lon, lat, halfKm) {
+  const z = TERRAIN_Z;
+  const scale = Math.pow(2, z);
+  const mPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / scale;
+  const halfPx = Math.round((halfKm * 1000) / mPerPx);
+  const cx = lon2tile(lon, z) * 256, cy = lat2tile(lat, z) * 256;
+
+  // which tiles does the box touch?
+  const x0 = Math.floor((cx - halfPx) / 256), x1 = Math.floor((cx + halfPx) / 256);
+  const y0 = Math.floor((cy - halfPx) / 256), y1 = Math.floor((cy + halfPx) / 256);
+  if ((x1 - x0 + 1) * (y1 - y0 + 1) > 9) return null;      // sanity guard
+
+  const tiles = new Map();
+  const jobs = [];
+  for (let tx = x0; tx <= x1; tx++) {
+    for (let ty = y0; ty <= y1; ty++) {
+      jobs.push(anLoadTile(z, tx, ty).then((d) => tiles.set(`${tx}/${ty}`, d)));
+    }
+  }
+  await Promise.all(jobs);
+  if ([...tiles.values()].every((v) => !v)) return null;
+
+  const at = (px, py) => {
+    const tx = Math.floor(px / 256), ty = Math.floor(py / 256);
+    const d = tiles.get(`${tx}/${ty}`);
+    if (!d) return null;
+    const ix = ((py - ty * 256) | 0) * 256 + ((px - tx * 256) | 0);
+    const o = ix * 4;
+    return d[o] * 256 + d[o + 1] + d[o + 2] / 256 - 32768;
+  };
+
+  const N = 41;                                   // 41x41 samples across the box
+  const step = (halfPx * 2) / (N - 1);
+  const grid = [];
+  let miss = 0;
+  for (let j = 0; j < N; j++) {
+    const row = [];
+    for (let i = 0; i < N; i++) {
+      const v = at(cx - halfPx + i * step, cy - halfPx + j * step);
+      if (v === null) miss++;
+      row.push(v);
+    }
+    grid.push(row);
+  }
+  if (miss > N * N * 0.5) return null;
+  return { grid, n: N, mPerCell: step * mPerPx, halfKm };
+}
+
+/* Turn the sampled grid into the few numbers that actually matter. */
+function anTerrainStats(t) {
+  const { grid, n, mPerCell } = t;
+  const c = (n - 1) / 2;
+  const elev = grid[c][c];
+  if (elev == null) return null;
+
+  const ring = (radiusCells) => {
+    const out = [];
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const d = Math.hypot(i - c, j - c);
+        if (d <= radiusCells && grid[j][i] != null) out.push({ v: grid[j][i], d });
+      }
+    }
+    return out;
+  };
+
+  // nearest low ground within ~1.5 km — stands in for the local river/drain
+  const nearCells = Math.min(c, Math.round(1500 / mPerCell));
+  const near = ring(nearCells);
+  const localMin = near.reduce((m, p) => Math.min(m, p.v), Infinity);
+  const hand = Math.max(0, elev - localMin);        // height above nearest drainage
+
+  // how much ground rises above you within ~1.2 km (a slide/debris source)
+  const upCells = Math.min(c, Math.round(1200 / mPerCell));
+  const up = ring(upCells);
+  const localMax = up.reduce((m, p) => Math.max(m, p.v), -Infinity);
+  const reliefUp = Math.max(0, localMax - elev);
+
+  // slope right where you stand, from the 8 neighbours
+  let maxG = 0;
+  for (let dj = -1; dj <= 1; dj++) {
+    for (let di = -1; di <= 1; di++) {
+      if (!di && !dj) continue;
+      const v = grid[c + dj] && grid[c + dj][c + di];
+      if (v == null) continue;
+      const run = Math.hypot(di, dj) * mPerCell;
+      maxG = Math.max(maxG, Math.abs(v - elev) / run);
+    }
+  }
+  const slopeDeg = Math.atan(maxG) * 180 / Math.PI;
+
+  // steepest ground anywhere within ~600 m (could fail *onto* you)
+  const closeCells = Math.min(c, Math.round(600 / mPerCell));
+  let steepNear = 0;
+  for (let j = 1; j < n - 1; j++) {
+    for (let i = 1; i < n - 1; i++) {
+      if (Math.hypot(i - c, j - c) > closeCells) continue;
+      const v = grid[j][i];
+      const a = grid[j][i - 1], b = grid[j][i + 1];
+      const u = grid[j - 1][i], w = grid[j + 1][i];
+      if (v == null || a == null || b == null || u == null || w == null) continue;
+      const g = Math.hypot((b - a) / (2 * mPerCell), (w - u) / (2 * mPerCell));
+      steepNear = Math.max(steepNear, Math.atan(g) * 180 / Math.PI);
+    }
+  }
+
+  return {
+    elev: Math.round(elev),
+    hand: Math.round(hand),
+    reliefUp: Math.round(reliefUp),
+    slopeDeg: Math.round(slopeDeg * 10) / 10,
+    steepNear: Math.round(steepNear * 10) / 10,
+  };
+}
+
+/* ==========================================================================
+   SCORING
+   Each hazard gets its own search radius (physics differs) and a 0-1
+   plausibility gate from the terrain. History only counts once it passes.
+   ========================================================================== */
+const HAZ_RADIUS_KM = {          // how far away a record still says something
+  landslide: 2.0,
+  debris_flow: 2.5,
+  flash_flood: 3.0,
+  flood: 2.5,
+  glof: 6.0,
+  avalanche: 3.0,
+  other: 2.5,
+};
+const CONTEXT_KM = 8;            // what the mini-map shows
+
+/* Terrain read per hazard:
+     p    — plausibility 0..1, gates whether nearby history counts at all
+     base — intrinsic susceptibility 0..1 from the landform itself, so a
+            30° slope is flagged even where nobody happened to file a report
+     why  — the sentence shown to the user */
+function anGate(hz, T) {
+  if (!T) return { p: 0.65, base: 0, why: "terrain unknown" };
+
+  const { hand, slopeDeg, steepNear, reliefUp, elev } = T;
+
+  switch (hz) {
+    case "flood": {
+      // water has to climb to you. HAND is the whole story.
+      const p = hand <= 4 ? 1 : hand <= 10 ? 0.8 : hand <= 20 ? 0.45 :
+                hand <= 35 ? 0.18 : hand <= 55 ? 0.06 : 0.02;
+      const base = hand <= 3 ? 0.32 : hand <= 8 ? 0.18 : 0;
+      return { p, base, why: hand <= 10
+        ? `you are only ${hand} m above the nearest low ground`
+        : `you are ${hand} m above the nearest low ground` };
+    }
+    case "flash_flood":
+    case "debris_flow": {
+      // needs a steep catchment above AND you low enough to be in its path
+      const pH = hand <= 8 ? 1 : hand <= 20 ? 0.7 : hand <= 40 ? 0.3 : 0.07;
+      const pR = reliefUp >= 400 ? 1 : reliefUp >= 150 ? 0.7 : reliefUp >= 60 ? 0.3 : 0.08;
+      const p = pH * pR;
+      const base = p >= 0.6 ? 0.3 : p >= 0.3 ? 0.16 : 0;
+      return { p, base, why: reliefUp < 60
+        ? "no steep ground rises above you"
+        : `${fmt(reliefUp)} m of ground rises above you, and you sit ${hand} m above the channel` };
+    }
+    case "landslide": {
+      const pS = slopeDeg >= 20 ? 1 : slopeDeg >= 12 ? 0.75 : slopeDeg >= 6 ? 0.35 : 0.08;
+      const pN = steepNear >= 25 ? 1 : steepNear >= 15 ? 0.65 : steepNear >= 8 ? 0.3 : 0.07;
+      const p = Math.max(pS, pN * 0.85);
+      // steep ground is dangerous whether or not a report was ever filed
+      const worst = Math.max(slopeDeg, steepNear * 0.8);
+      const base = worst >= 32 ? 0.5 : worst >= 25 ? 0.36 : worst >= 18 ? 0.22 :
+                   worst >= 12 ? 0.1 : 0;
+      return { p, base, why: Math.max(slopeDeg, steepNear) < 8
+        ? "the ground here is flat, with nothing steep close by"
+        : `slope ${slopeDeg}° here, up to ${steepNear}° within 600 m` };
+    }
+    case "glof": {
+      const p = hand <= 10 ? 1 : hand <= 25 ? 0.6 : hand <= 45 ? 0.2 : 0.04;
+      return { p, base: 0, why: `you are ${hand} m above the valley floor` };
+    }
+    case "avalanche": {
+      const p = elev >= 3500 ? 1 : elev >= 2800 ? 0.5 : elev >= 2200 ? 0.12 : 0.01;
+      const base = elev >= 3500 && steepNear >= 25 ? 0.3 : 0;
+      return { p, base, why: `you are at ${fmt(elev)} m` };
+    }
+    default:
+      return { p: 0.5, base: 0, why: "" };
+  }
+}
+
+function analysePoint(lon, lat, T) {
   const here = [lon, lat];
   const dName = districtAt(here);
   if (!dName) return { outside: true };
   const nowYear = new Date().getFullYear();
 
-  const near = [];          // within CONTEXT_KM, with distance
+  // everything within the context radius, tagged with distance
+  const near = [];
   for (const f of (state.data.events ? state.data.events.features : [])) {
     if (!f.geometry) continue;
     const km = kmBetween(here, f.geometry.coordinates);
     if (km <= CONTEXT_KM) near.push({ f, km, p: f.properties });
   }
   near.sort((a, b) => a.km - b.km);
-
-  const in5 = near.filter((n) => n.km <= LOCAL_KM);
-  const n5 = in5.length;
-  const n5_10yr = in5.filter((n) => n.p.year >= nowYear - 10).length;
-  const n5_3yr = in5.filter((n) => n.p.year >= nowYear - 3).length;
-  const deaths5 = in5.reduce((s, n) => s + (n.p.deaths || 0) + (n.p.missing || 0), 0);
-  const sev5 = in5.reduce((s, n) => s + (n.p.severity_score || 0), 0);
-  const wider3yr = near.filter((n) => n.km > LOCAL_KM && n.p.year >= nowYear - 3).length;
 
   const rain = (RAIN && RAIN.districts && RAIN.districts[dName]) || null;
   const rainMM = rain ? rain.mm_win_max : null;
@@ -1192,110 +1458,150 @@ function analysePoint(lon, lat) {
   const glofActive = lakes.some(
     (l) => l.trend === "growing" || (l.past_glof && l.past_glof !== "none recorded"));
 
-  // ---- score 0-100, all local -----------------------------------------
-  const sRecent = clamp01(n5_3yr / 4) * 32 + (deaths5 && n5_3yr ? 6 : 0);
-  const sHist = clamp01(n5 / 12) * 14 + clamp01(sev5 / 250) * 8;
-  const sWider = clamp01(wider3yr / 8) * 10;
-  const sRain = rainMM != null ? clamp01(rainMM / 170) * 20 : 0;
-  const sGlof = lakes.length ? (glofActive ? 20 : 13) : 0;
-  let risk = Math.round(sRecent + sHist + sWider + sRain + sGlof);
-  risk = Math.max(2, Math.min(98, risk));
+  // ---- per hazard: history in ITS radius, then gated by terrain ---------
+  const hazards = [];
+  for (const hz of ["landslide", "flash_flood", "debris_flow", "flood", "glof", "avalanche"]) {
+    const R = HAZ_RADIUS_KM[hz] || 2.5;
+    const hits = near.filter((n) => n.p.hazard === hz && n.km <= R);
+    const gate = anGate(hz, T);
+    if (hz === "glof" && !lakes.length && !hits.length) continue;
+
+    // recency- and proximity-weighted history, 0..1
+    let hist = 0;
+    for (const n of hits) {
+      const age = nowYear - (n.p.year || nowYear);
+      const wAge = age <= 3 ? 1 : age <= 10 ? 0.6 : age <= 25 ? 0.3 : 0.15;
+      const wDist = 1 - clamp01(n.km / R) * 0.65;
+      const wSev = 1 + clamp01((n.p.severity_score || 0) / 150) * 0.8;
+      hist += wAge * wDist * wSev;
+    }
+    hist = clamp01(hist / 5);
+
+    // an active glacial lake upstream is a standing threat even with no record
+    let base = gate.base || 0;
+    if (hz === "glof" && lakes.length) base = Math.max(base, glofActive ? 0.55 : 0.3);
+
+    // history is gated by terrain; the intrinsic landform score is not, since
+    // it already came from the terrain
+    const score = clamp01(Math.max(hist * gate.p, base));
+    if (score < 0.02 && !hits.length && !base) continue;
+    hazards.push({
+      hz, score, gate: gate.p, base, why: gate.why, n: hits.length, radiusKm: R,
+      terrainLed: base > hist * gate.p,
+      nearest: hits[0] || null,
+      lake: hz === "glof" && lakes.length ? lakes[0] : null,
+    });
+  }
+  hazards.sort((a, b) => b.score - a.score);
+  const live = hazards.filter((h) => h.score >= 0.12);
+
+  // ---- rain multiplies what is already plausible, it is not risk alone --
+  const rainF = rainMM == null ? 0 : clamp01((rainMM - 20) / 130);
+  const topScore = hazards.length ? hazards[0].score : 0;
+  const secondary = hazards.slice(1).reduce((s, h) => s + h.score, 0);
+  const combined = clamp01(topScore + secondary * 0.35);
+  const risk = Math.max(2, Math.min(98,
+    Math.round(combined * 74 + combined * rainF * 22 + rainF * 4)));
+
+  // ground that is intrinsically hazardous cannot read as "mostly fine",
+  // however quiet the reporting record happens to be
+  const terrainLed = hazards.some((h) => h.terrainLed && h.score >= 0.45);
+  const floor = terrainLed ? 40 : 0;
+  const shown = Math.max(risk, floor);
+
   const band =
-    risk < 18 ? { k: "low", label: "Looks OK", col: "#16a34a" } :
-    risk < 40 ? { k: "watch", label: "Some history nearby", col: "#d97706" } :
-    risk < 65 ? { k: "care", label: "Take care here", col: "#ea580c" } :
-                { k: "high", label: "High concern", col: "#b91c1c" };
+    shown < 18 ? { k: "low", label: "Looks safe", col: "#16a34a" } :
+    shown < 40 ? { k: "watch", label: "Mostly fine", col: "#65a30d" } :
+    shown < 62 ? { k: "care", label: "Take care", col: "#ea580c" } :
+                 { k: "high", label: "High concern", col: "#b91c1c" };
 
-  // one-line verdict
-  const fatalRecent = in5.find((n) => n.p.year >= nowYear - 6 && (n.p.deaths || n.p.missing));
+  // ---- one-line verdict, written from the terrain -----------------------
   let verdict;
-  if (band.k === "low")
-    verdict = n5
-      ? `A few old incidents within ${LOCAL_KM} km, nothing recent. No active warning signs.`
-      : `Nothing on record within ${LOCAL_KM} km, and no active rain signal. Still, records thin out before ~2011.`;
-  else if (band.k === "watch")
-    verdict = `${n5_10yr || n5} recorded incident${(n5_10yr || n5) === 1 ? "" : "s"} within ${LOCAL_KM} km. Worth knowing the escape routes.`;
-  else if (band.k === "care")
-    verdict = fatalRecent
-      ? `A fatal ${hazardName(fatalRecent.p.hazard).toLowerCase()} happened within ${LOCAL_KM} km in ${fatalRecent.p.year}. Repeated hazard history here.`
-      : `Repeated water/slope-hazard history within ${LOCAL_KM} km${rainMM >= 60 ? ", and rain is falling now" : ""}.`;
-  else
-    verdict = `Serious recent events nearby${rainMM >= 60 ? " and active heavy rain" : ""}${lakes.length ? " on a glacial-lake outburst path" : ""}. Reconsider staying if conditions are bad.`;
+  const top = live[0] || null;
+  const topName = top ? hazardName(top.hz).toLowerCase() : null;
+  if (!top) {
+    verdict = T
+      ? `Nothing here can realistically reach you: ${T.hand} m above the nearest low ground, ` +
+        `on ${T.slopeDeg}° ground. Nearby records are for terrain unlike yours.`
+      : `No plausible local hazard stands out.`;
+  } else if (top.terrainLed) {
+    // flagged by the landform itself, not by anyone's report
+    verdict = `The ground itself is the concern: ${top.why}. That is ${topName} terrain, ` +
+      `whether or not anything was ever reported here` +
+      (rainMM >= 60 ? `, and rain is falling now` : ``) + `.`;
+  } else if (band.k === "low") {
+    verdict = `Low exposure. Some ${topName} history nearby, but the ground you are on makes it unlikely.`;
+  } else if (band.k === "watch") {
+    verdict = `Mostly fine. ${topName[0].toUpperCase() + topName.slice(1)} is the one worth knowing about here.`;
+  } else if (band.k === "care") {
+    verdict = `The terrain here does support ${topName}` +
+      (rainMM >= 60 ? `, and rain is falling now` : ``) + `. Know your way to higher ground.`;
+  } else {
+    verdict = `Real ${topName} exposure at this spot` +
+      (rainMM >= 60 ? ` with active heavy rain` : ``) +
+      `. Reconsider staying if conditions worsen.`;
+  }
 
-  // ---- three factor readouts -----------------------------------------
+  // ---- three chips ------------------------------------------------------
   const rainLvl = rainMM == null ? "n/a" : rainMM >= 90 ? "high" : rainMM >= 40 ? "med" : "low";
-  const actLvl = n5_3yr >= 3 || (n5_3yr >= 1 && deaths5) ? "high" : n5_10yr >= 1 ? "med" : "low";
-  const glofLvl = !lakes.length ? "low" : glofActive ? "high" : "med";
+  const groundLvl = !T ? "n/a" : T.hand >= 30 && T.slopeDeg < 8 ? "low"
+    : T.hand >= 12 || T.slopeDeg < 15 ? "med" : "high";
+  const histLvl = !live.length ? "low" : live[0].score >= 0.5 ? "high"
+    : live[0].score >= 0.25 ? "med" : "low";
   const factors = [
+    { key: "Your ground", lvl: groundLvl,
+      text: T ? `${fmt(T.elev)} m · +${T.hand} m over low · ${T.slopeDeg}°` : "elevation unavailable" },
     { key: "Rain now", lvl: rainLvl,
-      text: rainMM == null ? "not configured"
-        : `${Math.round(rainMM)} mm / ${RAIN.window_days}d` },
-    { key: "Recent activity", lvl: actLvl,
-      text: n5_10yr ? `${n5_10yr} in 10 yr within ${LOCAL_KM} km` : `none within ${LOCAL_KM} km` },
-    { key: "Outburst risk", lvl: glofLvl,
-      text: lakes.length ? `${lakes[0].lake} → ${lakes[0].downstream_river}` : "not on a mapped path" },
+      text: rainMM == null ? "not configured" : `${Math.round(rainMM)} mm / ${RAIN.window_days}d` },
+    { key: "Plausible here", lvl: histLvl,
+      text: live.length ? live.map((h) => hazardName(h.hz)).slice(0, 2).join(", ") : "nothing significant" },
   ];
 
-  // ---- "if something happens here" ----------------------------------
-  const hz = new Set(near.filter((n) => n.km <= CONTEXT_KM).map((n) => n.p.hazard));
-  const could = [];
-  if (lakes.length)
-    could.push(`<b>Sudden surge</b> from a glacial-lake outburst up the ${lakes[0].downstream_river} — minutes of warning at most. Know the high ground.`);
-  if (rainMM != null && rainMM >= 60)
-    could.push(`<b>Rain-driven trouble</b> — ${Math.round(rainMM)} mm already fell in the district over ${RAIN.window_days} day${RAIN.window_days === 1 ? "" : "s"}.`);
-  if (hz.has("flash_flood"))
-    could.push(`<b>Flash flood</b> in the nearest stream or gully — water can rise in minutes even with no rain overhead.`);
-  if (hz.has("landslide"))
-    could.push(`<b>Landslide / slope failure</b>, worst on cut slopes, road benches and after prolonged rain.`);
-  if (hz.has("debris_flow"))
-    could.push(`<b>Debris flow</b> — a fast slurry of mud and boulders down a side channel.`);
-  if (hz.has("flood"))
-    could.push(`<b>River flooding</b> if you are on the valley floor or a low bank.`);
-  if (hz.has("avalanche"))
-    could.push(`<b>Snow or ice avalanche</b> from the slopes above.`);
-  if (!could.length)
-    could.push(`No specific local hazard stands out. General monsoon caution (Jun–Sep): avoid camping in dry stream beds and directly below steep slopes.`);
-
   return {
-    outside: false, here, dName, slug: slugify(dName),
-    risk, band, verdict, factors, could,
-    n5, n5_10yr, deaths5, radiusKm: LOCAL_KM,
-    nearList: near.slice(0, 24),                 // for the map
-    recentList: near.filter((n) => n.p.year >= nowYear - 12).slice(0, 3),
+    outside: false, here, dName, slug: slugify(dName), T,
+    risk, band, verdict, factors,
+    hazards, live, rainMM, lakes,
+    nearList: near.slice(0, 40),
+    recentList: near.filter((n) => {
+      const h = hazards.find((x) => x.hz === n.p.hazard);
+      return n.p.year >= nowYear - 15 && h && h.gate >= 0.25 && n.km <= (h.radiusKm + 1);
+    }).slice(0, 3),
+    anyRecent: near.filter((n) => n.p.year >= nowYear - 15).slice(0, 3),
   };
 }
 
 /* ---- staged progress, then result ------------------------------------ */
-async function runAnalysis(lon, lat) {
+async function runAnalysis(lon, lat, placeLabel) {
   anShow();
+  AN.place = placeLabel || null;
   AN.body.innerHTML =
-    '<p class="an-note">Checking the ground around you. Local heuristic — ' +
-    'recorded incidents, current rain, outburst paths. Not a forecast.</p>' +
+    '<p class="an-note">Checking the ground you are standing on — elevation, ' +
+    'slope, rain and what has actually happened nearby.</p>' +
     '<div class="an-prog"><span id="an-bar"></span></div>' +
     '<p class="an-step" id="an-step">Locating you…</p>';
   const bar = document.getElementById("an-bar");
   const step = document.getElementById("an-step");
+  const set = (msg, pct) => { if (step) step.textContent = msg; if (bar) bar.style.width = pct + "%"; };
+
+  set("Finding your exact spot…", 14);
+  await new Promise((r) => setTimeout(r, 260));
+
+  set("Reading the terrain under you (SRTM)…", 34);
+  let T = null;
+  try {
+    const sampled = await anSampleTerrain(lon, lat, 2.0);
+    if (sampled) T = anTerrainStats(sampled);
+  } catch (e) { T = null; }
+
+  set("Reading rain over the last few days…", 58);
   await anLoadGlof();
-  const steps = [
-    ["Finding your exact spot…", 24],
-    ["Reading rain over the last few days…", 46],
-    ["Scanning incidents within " + CONTEXT_KM + " km…", 70],
-    ["Checking glacial-lake outburst paths…", 90],
-  ];
-  let i = 0;
-  requestAnimationFrame(() => (bar.style.width = "8%"));
-  const tick = () => {
-    if (i < steps.length) {
-      step.textContent = steps[i][0];
-      bar.style.width = steps[i][1] + "%";
-      i++;
-      setTimeout(tick, 420);
-    } else {
-      bar.style.width = "100%";
-      setTimeout(() => renderAnalysis(analysePoint(lon, lat)), 300);
-    }
-  };
-  setTimeout(tick, 320);
+  await new Promise((r) => setTimeout(r, 240));
+
+  set("Matching hazards to your slope and height…", 82);
+  await new Promise((r) => setTimeout(r, 300));
+
+  set("Scoring…", 100);
+  setTimeout(() => renderAnalysis(analysePoint(lon, lat, T)), 260);
 }
 
 function facChip(f) {
@@ -1312,8 +1618,34 @@ function renderAnalysis(d) {
     return;
   }
 
-  const recent = d.recentList.length
-    ? d.recentList.map((n) => {
+  // --- what could happen, ranked, each with its terrain reason ----------
+  const hazRows = d.hazards.slice(0, 5).map((h) => {
+    const col = HAZARD_COLORS[h.hz] || "#888";
+    const pct = Math.round(h.score * 100);
+    const lvl = h.score >= 0.5 ? "Likely enough to plan for"
+      : h.score >= 0.25 ? "Possible here"
+      : h.score >= 0.12 ? "Low but not zero"
+      : "Very unlikely here";
+    const hist = h.n
+      ? `${h.n} recorded within ${h.radiusKm} km`
+      : h.lake ? `no record, but ${h.lake.lake} sits upstream`
+      : h.terrainLed ? "flagged by the landform, not by a report"
+      : "nothing recorded nearby";
+    return '<div class="an-hz">' +
+      '<span class="an-hz-bar"><i style="height:' + Math.max(5, pct) + '%;background:' + col + '"></i></span>' +
+      '<span class="an-hz-txt">' +
+        '<span class="an-hz-top"><b style="color:' + col + '">' + hazardName(h.hz) + '</b>' +
+        '<em>' + lvl + '</em></span>' +
+        '<span class="an-hz-why">' + h.why + ' · ' + hist + '</span>' +
+      '</span></div>';
+  }).join("") ||
+    '<p class="an-note">No water- or slope-hazard record within range of this spot.</p>';
+
+  const recentSrc = d.recentList.length ? d.recentList : d.anyRecent;
+  const recentHead = d.recentList.length ? "Recently near here"
+    : "Nearby records (different terrain to yours)";
+  const recent = recentSrc.length
+    ? recentSrc.map((n) => {
         const p = n.p;
         const col = HAZARD_COLORS[p.hazard] || "#888";
         return '<li>' +
@@ -1327,7 +1659,14 @@ function renderAnalysis(d) {
         '</li>';
       }).join("")
     : '<li class="anr-none">Nothing recorded within ' + CONTEXT_KM +
-      ' km in the last 12 years. Pre-2011 records are sparse, so stay alert anyway.</li>';
+      ' km in the last 15 years. Pre-2011 records are sparse, so stay alert anyway.</li>';
+
+  const terrainLine = d.T
+    ? `You are at <b>${fmt(d.T.elev)} m</b>, <b>${d.T.hand} m</b> above the nearest low ground, ` +
+      `on a <b>${d.T.slopeDeg}°</b> slope` +
+      (d.T.reliefUp >= 60 ? `, with ${fmt(d.T.reliefUp)} m of ground rising above you.` : `, with nothing steep above you.`)
+    : `Elevation data could not be loaded, so hazards could not be gated on terrain — ` +
+      `the score below leans on nearby records alone and will overstate risk on high, flat ground.`;
 
   AN.body.innerHTML =
     '<div class="an-verdict an-b-' + d.band.k + '">' +
@@ -1336,27 +1675,33 @@ function renderAnalysis(d) {
       '<div class="an-verdict-txt">' +
         '<span class="an-band" style="background:' + d.band.col + '">' + d.band.label + '</span>' +
         '<p>' + d.verdict + '</p>' +
-        '<p class="an-note">within ~' + d.radiusKm + ' km of you · ' + d.dName + ' district</p>' +
+        '<p class="an-note">' + (AN.place && AN.place !== d.dName
+          ? AN.place + ' · ' + d.dName + ' district'
+          : d.dName + ' district') + '</p>' +
       '</div>' +
     '</div>' +
 
     '<div class="an-facs">' + d.factors.map(facChip).join("") + '</div>' +
 
+    '<p class="an-terrain">' + terrainLine + '</p>' +
+
+    '<div class="an-sec"><h3>What could actually happen here</h3>' + hazRows +
+      '<p class="an-note">Ranked by how possible each is <em>at your spot</em> — a record ' +
+      'nearby only counts if the terrain under you could produce the same thing.</p></div>' +
+
     '<div class="an-sec"><h3>Affected area around you</h3>' +
       '<div class="an-map-box" id="an-map-box"></div>' +
       '<p class="an-maplegend">Heat = concentration of past incidents. Dots are the ' +
         'individual records, coloured by type, bigger = worse. ' +
-        'Ring = ' + d.radiusKm + ' km around you.</p>' +
+        'Ring = 2 km around you.</p>' +
     '</div>' +
 
-    '<div class="an-sec"><h3>Recently near here</h3><ul class="an-recent">' + recent + '</ul></div>' +
-
-    '<div class="an-sec"><h3>If something happens here</h3>' +
-      '<ul class="an-list">' + d.could.map((x) => "<li>" + x + "</li>").join("") + '</ul></div>' +
+    '<div class="an-sec"><h3>' + recentHead + '</h3><ul class="an-recent">' + recent + '</ul></div>' +
 
     '<a class="btn btn-primary an-full" href="district.html?d=' +
       encodeURIComponent(d.slug) + filterQuery() + '">Open the full history for this area →</a>' +
-    '<p class="an-foot">A heuristic safety check, not an operational warning. ' +
+    '<p class="an-foot">A terrain-aware heuristic, not an operational warning. Elevation is ' +
+    'SRTM 30 m, so it misses embankments, walls and anything built since 2000. ' +
     'For official alerts use Nepal’s DHM and NDRRMA. ' +
     '<a href="methodology.html">How this is built →</a></p>';
 
@@ -1374,8 +1719,8 @@ function buildAnMiniMap(d) {
     geometry: n.f.geometry,
     properties: { hazard: n.f.properties.hazard, sev: n.f.properties.severity_score || 1 },
   }));
-  const ring = turf.circle(d.here, d.radiusKm, { steps: 64, units: "kilometers" });
-  const bb = turf.bbox(turf.circle(d.here, d.radiusKm * 1.9, { units: "kilometers" }));
+  const ring = turf.circle(d.here, 2, { steps: 64, units: "kilometers" });
+  const bb = turf.bbox(turf.circle(d.here, 2.6, { units: "kilometers" }));
 
   const m = new maplibregl.Map({
     container: box, style: MAP_STYLE, attributionControl: false,
@@ -1384,30 +1729,37 @@ function buildAnMiniMap(d) {
   });
   AN.mini = m;
   m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+  m.addControl(new maplibregl.ScaleControl({ maxWidth: 80, unit: "metric" }), "bottom-left");
 
   let done = false;
   const add = () => {
     if (done || !m.isStyleLoaded()) return;
     done = true;
-    try { window.NHM.simplifyBasemap(m, { mask: false }); } catch (e) {}
+    // Deliberately NOT simplified: at 2-4 km across, the street names, place
+    // labels and footpaths are the whole point — they are how you recognise
+    // where you actually are. Hazard layers go underneath the label layers so
+    // the names stay readable on top.
+    const firstLabel = (m.getStyle().layers || [])
+      .find((l) => l.type === "symbol" && l.layout && l.layout["text-field"]);
+    const under = firstLabel ? firstLabel.id : undefined;
 
     m.addSource("an-ring", { type: "geojson", data: ring });
     m.addLayer({ id: "an-ring-f", type: "fill", source: "an-ring",
-      paint: { "fill-color": "#c2410c", "fill-opacity": 0.06 } });
+      paint: { "fill-color": "#c2410c", "fill-opacity": 0.06 } }, under);
     m.addLayer({ id: "an-ring-l", type: "line", source: "an-ring",
       paint: { "line-color": "#c2410c", "line-opacity": 0.5, "line-width": 1.4,
-        "line-dasharray": [2, 2] } });
+        "line-dasharray": [2, 2] } }, under);
 
     m.addSource("an-ev", { type: "geojson",
       data: { type: "FeatureCollection", features: feats } });
     m.addLayer({ id: "an-ev-heat", type: "heatmap", source: "an-ev",
       paint: {
         "heatmap-weight": ["interpolate", ["linear"], ["get", "sev"], 0, 0.4, 200, 1],
-        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 8, 1, 13, 2.4],
-        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 8, 22, 13, 60],
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 8, 1, 14, 2.4],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 8, 22, 14, 60],
         "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], ...THEME.heat],
-        "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 14, 0.55],
-      } });
+        "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 15, 0.55],
+      } }, under);
     const hzColor = ["match", ["get", "hazard"]];
     Object.entries(HAZARD_COLORS).forEach(([h, c]) => hzColor.push(h, c));
     hzColor.push("#888");
@@ -1416,7 +1768,7 @@ function buildAnMiniMap(d) {
         "circle-radius": ["interpolate", ["linear"], ["get", "sev"], 0, 3, 50, 5.5, 400, 10],
         "circle-color": hzColor, "circle-opacity": 0.9,
         "circle-stroke-width": 1.2, "circle-stroke-color": "#fff",
-      } });
+      } }, under);
 
     m.addSource("an-me", { type: "geojson",
       data: { type: "Feature", geometry: { type: "Point", coordinates: d.here } } });
@@ -1447,7 +1799,7 @@ document.getElementById("analysis-btn").onclick = () => {
     '<div class="an-prog"><span id="an-bar" style="width:6%"></span></div>' +
     '<p class="an-step">Requesting location permission…</p>';
   navigator.geolocation.getCurrentPosition(
-    (pos) => runAnalysis(pos.coords.longitude, pos.coords.latitude),
+    (pos) => runAnalysis(pos.coords.longitude, pos.coords.latitude, "Your location"),
     (err) => {
       const msg = err && err.code === 1
         ? "Location permission is required for the area check. Enable it for this site and try again."

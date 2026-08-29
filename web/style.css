@@ -1585,12 +1585,58 @@ body.impact { height: 100%; overflow: hidden; }
 .an-fac-k { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
 .an-fac-t { font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; }
 
+/* the terrain sentence under the chips */
+.an-terrain {
+  margin: 0; padding: 10px 12px;
+  border: 1px solid var(--hair); border-left: 3px solid var(--ink-ghost);
+  border-radius: 8px; background: var(--surface-2);
+  font-size: 12px; line-height: 1.6; color: var(--ink-dim);
+}
+.an-terrain b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+
+/* ranked "what could actually happen" rows */
+.an-hz { display: grid; grid-template-columns: 6px 1fr; gap: 11px; align-items: stretch; margin: 0 0 9px; }
+.an-hz-bar {
+  width: 6px; border-radius: 999px; background: var(--surface-3);
+  display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden;
+}
+.an-hz-bar i { display: block; width: 100%; border-radius: 999px; }
+.an-hz-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 1px 0; }
+.an-hz-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.an-hz-top b { font-size: 12.5px; font-weight: 650; }
+.an-hz-top em {
+  font-style: normal; font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint);
+}
+.an-hz-why { font-size: 11px; color: var(--ink-faint); line-height: 1.5; }
+
+/* "Analyse" button beside the area-card title */
+.ac-title { display: flex; align-items: flex-start; gap: 8px; }
+.ac-title h3 { flex: 1 1 auto; min-width: 0; }
+.ac-analyse {
+  flex: none; display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 1px; padding: 4px 9px;
+  font: inherit; font-size: 11px; font-weight: 600;
+  color: var(--accent); background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--surface));
+  border-radius: 999px; cursor: pointer; white-space: nowrap;
+  transition: background 0.14s, border-color 0.14s;
+}
+.ac-analyse:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--surface));
+}
+
 /* mini hazard map */
 .an-map-box {
-  height: 190px; border-radius: 12px; overflow: hidden;
+  height: 230px; border-radius: 12px; overflow: hidden;
   border: 1px solid var(--hair); background: var(--surface-2);
 }
 .an-map-box .maplibregl-ctrl-bottom-right { transform: scale(0.82); transform-origin: bottom right; }
+.an-map-box .maplibregl-ctrl-scale {
+  font-size: 9.5px; background: rgba(255, 255, 255, 0.82);
+  border-color: var(--hair-strong); color: var(--ink-faint);
+}
 .an-maplegend { font-size: 10.5px; color: var(--ink-ghost); line-height: 1.5; margin: 8px 0 0; }
 
 /* recently-near list */
@@ -1622,7 +1668,7 @@ body.impact { height: 100%; overflow: hidden; }
   .an-card { max-height: 92dvh; }
   .an-facs { grid-template-columns: 1fr; }
   .an-fac { flex-direction: row; align-items: baseline; gap: 7px; flex-wrap: wrap; }
-  .an-map-box { height: 168px; }
+  .an-map-box { height: 200px; }
 }
 
 /* ============================================================================

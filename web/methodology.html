@@ -133,7 +133,45 @@
     <p>For official flood and weather warnings use Nepal's Department of
       Hydrology and Meteorology.</p>
 
-    <h2>9. Impact corridors</h2>
+    <h2>9. "Analysis of Risk" — the local check</h2>
+    <p>The chart button by the panel title (and beside any area card's name)
+      answers one question: <i>is this particular spot exposed?</i> It is a
+      heuristic, not a forecast, and it deliberately works at a few hundred
+      metres rather than at district scale — a district figure would tell
+      someone on a Kathmandu ridge the same thing it tells someone on the
+      Bagmati bank, which is useless.</p>
+    <p>The step that makes it local is <b>terrain</b>. Elevation is read
+      client-side from SRTM via free
+      <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank"
+         rel="noopener">AWS terrain tiles</a> over a 4&nbsp;km box, giving three
+      numbers for the spot you are standing on:</p>
+    <ul>
+      <li><b>Height above the nearest low ground</b> (within ~1.5&nbsp;km) —
+        stands in for how far the local river would have to climb.</li>
+      <li><b>Slope</b> at the point, and the steepest ground within 600&nbsp;m.</li>
+      <li><b>Relief above</b> — how much ground rises within ~1.2&nbsp;km, i.e.
+        whether there is a catchment to send debris down.</li>
+    </ul>
+    <p>Each hazard is then <b>gated</b> on those numbers before any recorded
+      history counts. Flooding scales down sharply above ~20&nbsp;m of height
+      over the nearest low ground and is near-zero past ~55&nbsp;m; landslides
+      need slope; debris flows need both a channel position and relief above;
+      avalanches need altitude. A flood recorded 600&nbsp;m away therefore adds
+      nothing to a score for a spot 95&nbsp;m up a ridge — which is the whole
+      point.</p>
+    <p>Terrain also contributes <b>on its own</b>: ground steeper than about
+      25° is flagged as landslide terrain whether or not anyone ever filed a
+      report there, because the reporting record is far thinner than the hazard.
+      History is weighted by recency, distance and severity within a
+      per-hazard radius (landslide 2&nbsp;km, flood 2.5&nbsp;km, flash flood
+      3&nbsp;km, GLOF 6&nbsp;km). Recent IMERG rainfall multiplies what is
+      already plausible rather than counting as risk by itself.</p>
+    <p>Limits worth stating plainly: SRTM is 30&nbsp;m and dates from 2000, so
+      it misses embankments, flood walls, river training and anything built
+      since; the score is comparative, not a probability; and it is not a
+      warning system. For official alerts use Nepal's DHM and NDRRMA.</p>
+
+    <h2>10. Impact corridors</h2>
     <p>Each significant event (any with recorded deaths, or a moderate-or-worse
       severity class) has an <b>impact view</b> showing a downstream corridor.
       There are two kinds, and the page always says which you are looking at:</p>
@@ -160,7 +198,7 @@
       units the path crosses — not a claim that each was affected by that event.
       Elevation profiles are sampled from SRTM 30&nbsp;m via OpenTopoData.</p>
 
-    <h2>10. Experimental layers</h2>
+    <h2>11. Experimental layers</h2>
     <p>The <a href="experimental.html">experimental section</a> is walled off and
       carries its own disclaimer. It contains: (D) a descriptive seasonal
       climatology from this dataset — <b>not a forecast</b>; (A) zonal summaries
@@ -169,7 +207,7 @@
       inventory paired with the historical record of its downstream river
       corridor. None of these predict a specific event.</p>
 
-    <h2>11. Getting the data</h2>
+    <h2>12. Getting the data</h2>
     <p>Everything the site loads is a static file under
       <code>data/processed/</code> — it doubles as an API:</p>
     <ul>
@@ -184,7 +222,7 @@
     <p>The map's download button exports whatever is currently filtered as CSV +
       GeoJSON. Per-district and per-event downloads are on those pages.</p>
 
-    <h2>12. Citation</h2>
+    <h2>13. Citation</h2>
     <pre class="cite">Nepal Water &amp; Slope Hazard Explorer (2026). Compiled hazard-event
 dataset for Nepal, 1971–present, from Nepal DRR/BIPAD and UNDRR DesInventar
 Sentinel, with administrative and population data from OCHA HDX.
