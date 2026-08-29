@@ -684,15 +684,94 @@ geolocate.on("outofmaxbounds", () => {
   toast("You appear to be outside Nepal — search for a district or municipality instead.");
 });
 
-/* mobile bottom-sheet handle */
+/* =========================================================================
+   Mobile bottom sheet: starts at "peek" so the map is usable on open, and
+   can be dragged smoothly between peek and open (or tapped on the handle).
+   ========================================================================= */
 const panelEl = document.getElementById("panel");
-function collapsePanel() {
-  if (matchMedia("(max-width: 899px)").matches) panelEl.dataset.state = "peek";
-}
-document.getElementById("panel-handle").onclick = () => {
-  panelEl.dataset.state = panelEl.dataset.state === "open" ? "peek" : "open";
-};
+const panelBodyEl = panelEl.querySelector(".panel-body");
+const panelHeadEl = panelEl.querySelector(".panel-head");
+const isMobile = () => matchMedia("(max-width: 899px)").matches;
+const PEEK_REVEAL = 248;               // keep in sync with style.css
+
+function setSheet(stateName) { panelEl.dataset.state = stateName; }
+function collapsePanel() { if (isMobile()) setSheet("peek"); }
+
+// open on the map: don't cover it — start peeked
+if (isMobile()) setSheet("peek");
+addEventListener("resize", () => {
+  if (!isMobile()) setSheet("open");            // desktop has no sheet states
+  else if (!panelEl.dataset.state) setSheet("peek");
+});
+
+// tap the grab handle to toggle
+document.getElementById("panel-handle").addEventListener("click", (e) => {
+  if (panelEl.dataset.dragMoved) { delete panelEl.dataset.dragMoved; return; }
+  setSheet(panelEl.dataset.state === "open" ? "peek" : "open");
+});
+
 map.on("dragstart", collapsePanel);
+
+/* ---- drag ---- */
+(function sheetDrag() {
+  let startY = 0, startTranslate = 0, dragging = false, lastY = 0, lastT = 0, vy = 0;
+
+  const peekPx = () => Math.max(0, panelEl.offsetHeight - PEEK_REVEAL);
+  const currentTranslate = () =>
+    panelEl.dataset.state === "open" ? 0 : peekPx();
+
+  function down(e) {
+    if (!isMobile()) return;
+    // a downward drag that begins inside a scrolled body should scroll, not drag
+    if (e.target.closest(".panel-body") && panelBodyEl.scrollTop > 0) return;
+    dragging = true;
+    startY = lastY = e.clientY;
+    lastT = performance.now();
+    vy = 0;
+    startTranslate = currentTranslate();
+    panelEl.dataset.dragging = "1";
+    delete panelEl.dataset.dragMoved;
+    panelEl.style.setProperty("--drag-y", startTranslate + "px");
+    panelEl.setPointerCapture?.(e.pointerId);
+  }
+
+  function move(e) {
+    if (!dragging) return;
+    const dy = e.clientY - startY;
+    if (Math.abs(dy) > 4) panelEl.dataset.dragMoved = "1";
+    let y = startTranslate + dy;
+    y = Math.max(-24, Math.min(peekPx() + 24, y));   // a little rubber-band
+    panelEl.style.setProperty("--drag-y", y + "px");
+    const now = performance.now();
+    vy = (e.clientY - lastY) / Math.max(1, now - lastT);   // px per ms
+    lastY = e.clientY; lastT = now;
+    e.preventDefault();
+  }
+
+  function up() {
+    if (!dragging) return;
+    dragging = false;
+    delete panelEl.dataset.dragging;
+    const y = parseFloat(getComputedStyle(panelEl).getPropertyValue("--drag-y")) || 0;
+    const mid = peekPx() / 2;
+    // strong flick wins over position
+    let open;
+    if (vy < -0.45) open = true;
+    else if (vy > 0.45) open = false;
+    else open = y < mid;
+    panelEl.style.removeProperty("--drag-y");
+    setSheet(open ? "open" : "peek");
+    // let any synthesized click read dragMoved first, then clear it
+    setTimeout(() => { delete panelEl.dataset.dragMoved; }, 400);
+  }
+
+  for (const el of [panelHeadEl, document.getElementById("panel-handle")]) {
+    el.addEventListener("pointerdown", down);
+  }
+  addEventListener("pointermove", move, { passive: false });
+  addEventListener("pointerup", up);
+  addEventListener("pointercancel", up);
+})();
 
 /* desktop: slide the whole panel off-screen for a full-width map */
 const collapseBtn = document.getElementById("panel-collapse");

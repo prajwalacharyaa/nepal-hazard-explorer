@@ -194,30 +194,45 @@ h1, h2, h3 {
     border-radius: 18px 18px 0 0;
     max-height: 86dvh;
     padding-bottom: env(safe-area-inset-bottom);
-    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+    will-change: transform;
+    touch-action: pan-y;
   }
-  .panel-body { padding-left: 16px; padding-right: 16px; }
+  .panel-body { padding-left: 16px; padding-right: 16px; -webkit-overflow-scrolling: touch; }
   #panel[data-state="peek"] { transform: translateY(calc(100% - 248px)); }
   #panel[data-state="open"] { transform: translateY(0); }
+  /* while a finger is dragging the sheet, follow it 1:1 with no easing */
+  #panel[data-dragging] {
+    transition: none;
+    transform: translateY(var(--drag-y, 0));
+  }
+  /* the grab handle and header are the drag surface — the browser must not
+     also try to scroll or zoom from a touch that starts there */
+  #panel-handle, .panel-head { touch-action: none; }
   #panel-handle {
     display: block;
     width: 100%;
-    padding: 12px 0 4px;
+    padding: 14px 0 6px;
     background: none;
     border: 0;
-    cursor: pointer;
+    cursor: grab;
     flex: none;
+    touch-action: none;
     -webkit-tap-highlight-color: transparent;
   }
+  #panel-handle:active { cursor: grabbing; }
   #panel-handle::before {
     content: "";
     display: block;
-    width: 42px;
-    height: 4px;
+    width: 44px;
+    height: 5px;
     margin: 0 auto;
     border-radius: 999px;
     background: var(--hair-strong);
+    transition: background 0.15s, width 0.15s;
   }
+  #panel[data-dragging] #panel-handle::before,
+  #panel-handle:hover::before { background: var(--ink-ghost); width: 52px; }
 }
 
 .panel-head {
