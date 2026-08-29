@@ -159,6 +159,24 @@
       avalanches need altitude. A flood recorded 600&nbsp;m away therefore adds
       nothing to a score for a spot 95&nbsp;m up a ridge — which is the whole
       point.</p>
+    <p><b>Sudden releases are routed, not buffered.</b> A radius around a
+      glacial lake cannot say whether a surge reaches you — water follows
+      channels, so a point 600&nbsp;m up a valley side is safe while a village
+      40&nbsp;km downstream on the floodplain is not. <code>pipeline/surge_paths.py</code>
+      therefore traces, along the HydroRIVERS network, the route a release
+      would actually take from every known source in Nepal: the curated
+      glacial-lake inventory, and every dam, weir and hydropower plant in
+      OpenStreetMap. At analysis time the check asks two separate questions —
+      how far you are from the nearest such route, and how high you sit above
+      that channel — and both must be satisfied. Each plausible hazard is then
+      explained by its mechanism, naming the source, the distance upstream and
+      the river it would come down.</p>
+    <p>Dams appear because a structure upstream changes the picture in two
+      ways: it can release suddenly, and anything arriving from further
+      upstream meets the impoundment first. This is never a claim that a given
+      structure will fail — only that one sits on the reach above you.
+      OpenStreetMap coverage of Nepali barrages is uneven and many are
+      unnamed, so absence from the map is not evidence of absence.</p>
     <p>Terrain also contributes <b>on its own</b>: ground steeper than about
       25° is flagged as landslide terrain whether or not anyone ever filed a
       report there, because the reporting record is far thinner than the hazard.
@@ -217,6 +235,8 @@
       <li><code>calendar.json</code>, <code>outlook.json</code>,
         <code>glof.json</code>, <code>susceptibility.json</code>,
         <code>rain.json</code></li>
+      <li><code>surge_paths.json</code> — routed downstream release paths from
+        glacial lakes, dams, weirs and hydropower</li>
       <li><code>meta.json</code> — build date, counts, span, latest event</li>
     </ul>
     <p>The map's download button exports whatever is currently filtered as CSV +

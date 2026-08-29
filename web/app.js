@@ -1167,6 +1167,7 @@ const AN = {
   mini: null,        // the modal's own MapLibre instance
   glof: undefined,   // cached glof.json (null once fetched-and-missing)
   corr: undefined,   // cached corridors_index.json
+  surge: undefined,  // cached surge_paths.json (routed release paths)
 };
 AN.body = AN.el.querySelector(".an-body");
 
@@ -1199,6 +1200,53 @@ function kmBetween(a, b) {
 }
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const lerp = (a, b, t) => a + (b - a) * t;
+
+async function anLoadSurge() {
+  if (AN.surge !== undefined) return AN.surge;
+  try {
+    const d = await loadJSON(`${window.NHM.DATA}/surge_paths.json`);
+    AN.surge = d && d.paths ? d : null;
+    // a cheap bbox per route so the proximity scan can reject most of them
+    if (AN.surge) {
+      for (const r of AN.surge.paths) {
+        let w = 180, s2 = 90, e = -180, n = -90;
+        for (const c of r.path) {
+          if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0];
+          if (c[1] < s2) s2 = c[1]; if (c[1] > n) n = c[1];
+        }
+        r._bb = [w, s2, e, n];
+      }
+    }
+  } catch (err) { AN.surge = null; }
+  return AN.surge;
+}
+
+/* Nearest routed release path to a point, per source kind.
+
+   This is the question a radius cannot answer: a surge follows the channel, so
+   what matters is how far you are from the route it would actually take and
+   how high you sit above it — not how far you are from the lake. */
+function nearestSurge(lon, lat, kinds) {
+  if (!AN.surge) return null;
+  const degPad = 0.09;                    // ~10 km, the widest we care about
+  let best = null;
+  for (const r of AN.surge.paths) {
+    if (kinds.indexOf(r.kind) === -1) continue;
+    const b = r._bb;
+    if (lon < b[0] - degPad || lon > b[2] + degPad ||
+        lat < b[1] - degPad || lat > b[3] + degPad) continue;
+    // walk the vertices, tracking distance along the route as we go
+    let along = 0;
+    for (let i = 0; i < r.path.length; i++) {
+      if (i) along += kmBetween(r.path[i - 1], r.path[i]);
+      const d = kmBetween([lon, lat], r.path[i]);
+      if (!best || d < best.km) {
+        best = { km: d, alongKm: along, src: r };
+      }
+    }
+  }
+  return best;
+}
 
 async function anLoadCorridors() {
   if (AN.corr !== undefined) return AN.corr;
@@ -1430,8 +1478,22 @@ function anGate(hz, T) {
         : `slope ${slopeDeg}° here, up to ${steepNear}° within 600 m` };
     }
     case "glof": {
-      const p = hand <= 10 ? 1 : hand <= 25 ? 0.6 : hand <= 45 ? 0.2 : 0.04;
-      return { p, base: 0, why: `you are ${hand} m above the valley floor` };
+      // Two independent conditions, both required: the surge has to come past
+      // you at all (are you near the route it would take?), and it has to be
+      // able to climb to you (how high above that channel are you?).
+      const S = T.surge;
+      const pNear = !S ? 0.25              // no routing data: stay neutral
+        : S.km <= 0.7 ? 1 : S.km <= 1.5 ? 0.75 : S.km <= 3 ? 0.35
+        : S.km <= 6 ? 0.1 : 0.02;
+      const pHigh = hand <= 10 ? 1 : hand <= 25 ? 0.65 : hand <= 45 ? 0.25
+        : hand <= 80 ? 0.06 : 0.01;
+      const why = !S
+        ? `you are ${hand} m above the valley floor`
+        : S.km > 3
+          ? `the nearest routed outburst path runs ${S.km.toFixed(1)} km away`
+          : `you are ${hand} m above a channel that carries the ` +
+            `${S.src.name} outburst route`;
+      return { p: pNear * pHigh, base: 0, why };
     }
     case "avalanche": {
       const p = elev >= 3500 ? 1 : elev >= 2800 ? 0.5 : elev >= 2200 ? 0.12 : 0.01;
@@ -1461,6 +1523,11 @@ function analysePoint(lon, lat, T) {
   const rain = (RAIN && RAIN.districts && RAIN.districts[dName]) || null;
   const rainMM = rain ? rain.mm_win_max : null;
 
+  // routed release paths: which one passes closest, and how far downstream
+  const surgeGlof = nearestSurge(lon, lat, ["glacial_lake"]);
+  const surgeDam = nearestSurge(lon, lat, ["dam", "weir", "hydropower"]);
+  if (T) T.surge = surgeGlof;
+
   const lakes = (AN.glof && AN.glof.lakes || []).filter(
     (l) => (l.downstream_districts || []).indexOf(dName) !== -1);
   const glofActive = lakes.some(
@@ -1485,21 +1552,46 @@ function analysePoint(lon, lat, T) {
     }
     hist = clamp01(hist / 5);
 
-    // an active glacial lake upstream is a standing threat even with no record
+    // A lake upstream is a hazard SOURCE, not a reach. Whether its surge can
+    // get to you is still a terrain question, so this must be gated too —
+    // ungated it told someone 649 m up a valley side that a GLOF was likely.
     let base = gate.base || 0;
-    if (hz === "glof" && lakes.length) base = Math.max(base, glofActive ? 0.55 : 0.3);
+    if (hz === "glof" && (lakes.length || surgeGlof)) {
+      base = Math.max(base, (glofActive ? 0.55 : 0.3) * gate.p);
+    }
 
-    // history is gated by terrain; the intrinsic landform score is not, since
-    // it already came from the terrain
+    // history is gated by terrain; the landform score already came from it
     const score = clamp01(Math.max(hist * gate.p, base));
     if (score < 0.02 && !hits.length && !base) continue;
     hazards.push({
       hz, score, gate: gate.p, base, why: gate.why, n: hits.length, radiusKm: R,
-      terrainLed: base > hist * gate.p,
+      // only landform-derived hazards may claim "the ground itself is the
+      // concern"; a GLOF score comes from an inventory, not from your slope
+      terrainLed: (gate.base || 0) > 0 && (gate.base || 0) >= hist * gate.p,
       nearest: hits[0] || null,
       lake: hz === "glof" && lakes.length ? lakes[0] : null,
     });
   }
+  // A structure upstream is a separate mechanism from a glacial lake: it can
+  // fail, and it can also release a surge under operation. This is never a
+  // prediction that it will — only that one sits on the reach above you.
+  if (surgeDam && T) {
+    const pNear = surgeDam.km <= 0.7 ? 1 : surgeDam.km <= 1.5 ? 0.7
+      : surgeDam.km <= 3 ? 0.3 : surgeDam.km <= 6 ? 0.08 : 0.02;
+    const pHigh = T.hand <= 10 ? 1 : T.hand <= 25 ? 0.6 : T.hand <= 45 ? 0.2 : 0.03;
+    const score = clamp01(pNear * pHigh * 0.55);
+    if (score >= 0.04) {
+      hazards.push({
+        hz: "dam_release", score, gate: pNear * pHigh, base: 0, n: 0,
+        radiusKm: 6, terrainLed: false, nearest: null, lake: null,
+        surge: surgeDam,
+        why: `${/^unnamed/i.test(surgeDam.src.name) ? "an " : ""}${surgeDam.src.name} ` +
+             `sits about ${surgeDam.alongKm.toFixed(0)} km upstream on this ` +
+             `channel; you are ${T.hand} m above it`,
+      });
+    }
+  }
+
   hazards.sort((a, b) => b.score - a.score);
   const live = hazards.filter((h) => h.score >= 0.12);
 
@@ -1526,7 +1618,7 @@ function analysePoint(lon, lat, T) {
   // ---- one-line verdict, written from the terrain -----------------------
   let verdict;
   const top = live[0] || null;
-  const topName = top ? hazardName(top.hz).toLowerCase() : null;
+  const topName = top ? anHazLabel(top.hz).toLowerCase() : null;
   if (!top) {
     verdict = T
       ? `Nothing here can realistically reach you: ${T.hand} m above the nearest low ground, ` +
@@ -1562,7 +1654,7 @@ function analysePoint(lon, lat, T) {
     { key: "Rain now", lvl: rainLvl,
       text: rainMM == null ? "not configured" : `${Math.round(rainMM)} mm / ${RAIN.window_days}d` },
     { key: "Plausible here", lvl: histLvl,
-      text: live.length ? live.map((h) => hazardName(h.hz)).slice(0, 2).join(", ") : "nothing significant" },
+      text: live.length ? live.map((h) => anHazLabel(h.hz)).slice(0, 2).join(", ") : "nothing significant" },
   ];
 
   return {
@@ -1602,7 +1694,7 @@ async function runAnalysis(lon, lat, placeLabel) {
   } catch (e) { T = null; }
 
   set("Reading rain over the last few days…", 58);
-  await Promise.all([anLoadGlof(), anLoadCorridors()]);
+  await Promise.all([anLoadGlof(), anLoadCorridors(), anLoadSurge()]);
   await new Promise((r) => setTimeout(r, 240));
 
   set("Matching hazards to your slope and height…", 82);
@@ -1610,6 +1702,59 @@ async function runAnalysis(lon, lat, placeLabel) {
 
   set("Scoring…", 100);
   setTimeout(() => renderAnalysis(analysePoint(lon, lat, T)), 260);
+}
+
+/* dam_release is our own synthetic hazard, so it needs its own label/colour */
+const anHazLabel = (hz) => hz === "dam_release" ? "Dam or weir release" : hazardName(hz);
+const anHazColor = (hz) => hz === "dam_release" ? "#7c3aed" : (HAZARD_COLORS[hz] || "#888");
+
+/* "how could this actually happen here" — the chain of events, named. The
+   user's question was not just how likely, but by what route. */
+function anMechanism(h, d) {
+  const T = d.T;
+  switch (h.hz) {
+    case "glof": {
+      const S = h.surge || (T && T.surge);
+      if (!S) return "A moraine- or ice-dammed lake fails upstream and the surge travels down the valley.";
+      return `${S.src.name} sits about ${S.alongKm.toFixed(0)} km upstream along ` +
+        `this channel. If its dam failed — overtopped by an ice or rock fall into ` +
+        `the lake, or eroded through the moraine — the surge would route down ` +
+        (S.src.river ? S.src.river : "this river") +
+        `, reaching here in well under an hour and arriving as a wall of water ` +
+        `and debris rather than a rising river.`;
+    }
+    case "dam_release": {
+      const S = h.surge;
+      const who = /^unnamed/i.test(S.src.name)
+        ? `An ${S.src.detail}` : `${S.src.name} (${S.src.detail})`;
+      return `${who} sits about ${S.alongKm.toFixed(0)} km ` +
+        `upstream. A structure can release suddenly — a gate opening, an ` +
+        `overtopping during a flood peak, or a failure — and anything arriving ` +
+        `from further upstream, including an outburst, hits the impoundment ` +
+        `first. Being ${T ? T.hand : "?"} m above the channel is what decides ` +
+        `whether that reaches you.`;
+    }
+    case "landslide":
+      return `Prolonged or intense rain saturates the slope until it fails. ` +
+        `On ${T ? T.slopeDeg : "steep"}° ground the failure arrives in seconds, ` +
+        `and cut slopes, road benches and terraced ground fail first.`;
+    case "debris_flow":
+      return `Rain mobilises loose material in a steep side channel, which ` +
+        `picks up boulders and water as it descends and arrives as a fast slurry, ` +
+        `not as clear water.`;
+    case "flash_flood":
+      return `A cloudburst over the catchment above concentrates into the ` +
+        `nearest channel. The rain need not fall on you — the water arrives ` +
+        `from upstream, often within minutes and under a clear sky.`;
+    case "flood":
+      return `Sustained rain raises the river until it leaves its channel and ` +
+        `spreads across the low ground you are on.`;
+    case "avalanche":
+      return `New snow or a warming slope releases above you and runs out into ` +
+        `the valley below.`;
+    default:
+      return "";
+  }
 }
 
 function facChip(f) {
@@ -1628,7 +1773,7 @@ function renderAnalysis(d) {
 
   // --- what could happen, ranked, each with its terrain reason ----------
   const hazRows = d.hazards.slice(0, 5).map((h) => {
-    const col = HAZARD_COLORS[h.hz] || "#888";
+    const col = anHazColor(h.hz);
     const pct = Math.round(h.score * 100);
     const lvl = h.score >= 0.5 ? "Likely enough to plan for"
       : h.score >= 0.25 ? "Possible here"
@@ -1636,15 +1781,19 @@ function renderAnalysis(d) {
       : "Very unlikely here";
     const hist = h.n
       ? `${h.n} recorded within ${h.radiusKm} km`
-      : h.lake ? `no record, but ${h.lake.lake} sits upstream`
+      : h.surge ? `routed along the real river network`
       : h.terrainLed ? "flagged by the landform, not by a report"
       : "nothing recorded nearby";
+    // the mechanism is worth the space on anything actually plausible
+    const mech = h.score >= 0.12
+      ? '<span class="an-hz-mech">' + anMechanism(h, d) + '</span>' : "";
     return '<div class="an-hz">' +
       '<span class="an-hz-bar"><i style="height:' + Math.max(5, pct) + '%;background:' + col + '"></i></span>' +
       '<span class="an-hz-txt">' +
-        '<span class="an-hz-top"><b style="color:' + col + '">' + hazardName(h.hz) + '</b>' +
+        '<span class="an-hz-top"><b style="color:' + col + '">' + anHazLabel(h.hz) + '</b>' +
         '<em>' + lvl + '</em></span>' +
         '<span class="an-hz-why">' + h.why + ' · ' + hist + '</span>' +
+        mech +
       '</span></div>';
   }).join("") ||
     '<p class="an-note">No water- or slope-hazard record within range of this spot.</p>';
@@ -1713,7 +1862,10 @@ function renderAnalysis(d) {
       '<div class="an-map-box" id="an-map-box"></div>' +
       '<p class="an-maplegend">Heat = concentration of past incidents. Dots are the ' +
         'individual records, coloured by type, bigger = worse. ' +
-        'Ring = 2 km around you.</p>' +
+        'Ring = 2 km around you.' +
+        (d.hazards.some((h) => (h.surge || (h.hz === "glof" && d.T && d.T.surge)) && h.score >= 0.1)
+          ? ' The dashed line is the route a sudden release would take down the river network.'
+          : '') + '</p>' +
     '</div>' +
 
     '<div class="an-sec"><h3>' + recentHead + '</h3><ul class="an-recent">' + recent + '</ul></div>' +
@@ -1769,6 +1921,41 @@ function buildAnMiniMap(d) {
     m.addLayer({ id: "an-ring-l", type: "line", source: "an-ring",
       paint: { "line-color": "#c2410c", "line-opacity": 0.5, "line-width": 1.4,
         "line-dasharray": [2, 2] } }, under);
+
+    // the routed release paths, so "it could come from up there" is shown
+    // rather than only asserted
+    const routes = [];
+    for (const h of (d.hazards || [])) {
+      const S = h.surge || (h.hz === "glof" && d.T && d.T.surge);
+      if (!S || h.score < 0.1) continue;
+      if (routes.some((r) => r.id === S.src.id)) continue;
+      routes.push({ id: S.src.id, name: S.src.name, kind: S.src.kind, path: S.src.path });
+    }
+    if (routes.length) {
+      const routeCol = ["match", ["get", "kind"], "glacial_lake", "#8a4f7d", "#7c3aed"];
+      m.addSource("an-surge", { type: "geojson", data: {
+        type: "FeatureCollection",
+        features: routes.map((r) => ({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: r.path },
+          properties: { name: r.name, kind: r.kind },
+        })),
+      } });
+      m.addLayer({ id: "an-surge-glow", type: "line", source: "an-surge",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": routeCol, "line-width": 9,
+          "line-opacity": 0.16, "line-blur": 4 } }, under);
+      m.addLayer({ id: "an-surge-line", type: "line", source: "an-surge",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": routeCol, "line-width": 2.2,
+          "line-opacity": 0.85, "line-dasharray": [2, 1.5] } }, under);
+      m.addLayer({ id: "an-surge-label", type: "symbol", source: "an-surge",
+        layout: { "symbol-placement": "line-center",
+          "text-field": ["concat", ["get", "name"], " route"],
+          "text-size": 10.5, "text-font": ["Noto Sans Medium"] },
+        paint: { "text-color": "#6b21a8", "text-halo-color": "#ffffff",
+          "text-halo-width": 1.8 } });
+    }
 
     m.addSource("an-ev", { type: "geojson",
       data: { type: "FeatureCollection", features: feats } });

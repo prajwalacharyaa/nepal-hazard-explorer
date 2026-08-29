@@ -67,6 +67,9 @@ python outlook.py            # -> outlook.json  (seasonal climatology for the
 # impact corridors (downstream trace per significant event):
 python fetch_rivers.py       # HydroRIVERS Asia -> hydrorivers_nepal.gpkg (~79 MB once)
 python corridors.py          # -> corridors/<event id>.json + corridors_index.json
+python surge_paths.py        # -> surge_paths.json  (routes a glacial-lake /
+                             #    dam release would take downstream; --refresh
+                             #    refetches dams from OpenStreetMap)
 
 # experimental layers:
 python glof.py               # -> glof.json            (curated dangerous_lakes.csv, §7)

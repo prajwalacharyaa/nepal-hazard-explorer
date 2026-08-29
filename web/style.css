@@ -1609,6 +1609,11 @@ body.impact { height: 100%; overflow: hidden; }
   text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint);
 }
 .an-hz-why { font-size: 11px; color: var(--ink-faint); line-height: 1.5; }
+.an-hz-mech {
+  font-size: 11.5px; color: var(--ink-dim); line-height: 1.55;
+  margin-top: 4px; padding-left: 9px;
+  border-left: 2px solid var(--hair);
+}
 
 /* "Open the full view" call-out on the event detail page */
 .impact-cta {
