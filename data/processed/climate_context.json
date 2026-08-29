@@ -1,0 +1,158 @@
+{
+ "generated": "2026-08-29",
+ "note": "Observed climate context for Nepal. Everything here is an observation or simple arithmetic on one. Nothing is projected forward, and none of it predicts a specific event.",
+ "warming": {
+  "source": "NASA GISTEMP v4, 250 km land analysis (GHCNv4)",
+  "baseline": "1951-1980",
+  "through_year": 2026,
+  "anomaly_c": 1.42,
+  "trend_c_per_decade": {
+   "since_1951": 0.18,
+   "since_1975": 0.277,
+   "since_1995": 0.353
+  },
+  "freezing_level_shift_m": 218,
+  "lapse_rate_c_per_km": 6.5,
+  "note": "Freezing-level shift is the anomaly expressed in metres of mountain at a standard lapse rate, not a modelled snowline."
+ },
+ "glacial_lakes": {
+  "source": "ICIMOD/UNDP potentially-dangerous-glacial-lake inventory (curated)",
+  "total": 10,
+  "by_trend": {
+   "drained 1985": 1,
+   "growing": 8,
+   "unstable ice/rock": 1
+  },
+  "growing": [
+   {
+    "lake": "Lower Barun",
+    "district": "Sankhuwasabha",
+    "river": "Barun Khola / Arun",
+    "area_km2": 1.79
+   },
+   {
+    "lake": "Chamlang Tsho (South)",
+    "district": "Sankhuwasabha",
+    "river": "Hongu / Arun",
+    "area_km2": 1.77
+   },
+   {
+    "lake": "Tsho Rolpa",
+    "district": "Dolakha",
+    "river": "Rolwaling Khola / Tama Koshi",
+    "area_km2": 1.54
+   },
+   {
+    "lake": "Imja Tsho",
+    "district": "Solukhumbu",
+    "river": "Imja Khola / Dudh Koshi",
+    "area_km2": 1.35
+   },
+   {
+    "lake": "Thulagi (Dona)",
+    "district": "Manang",
+    "river": "Dona Khola / Marsyangdi",
+    "area_km2": 0.94
+   },
+   {
+    "lake": "West Chamjang",
+    "district": "Sankhuwasabha",
+    "river": "Chamjang / Arun",
+    "area_km2": 0.9
+   },
+   {
+    "lake": "Lumding Tsho",
+    "district": "Solukhumbu",
+    "river": "Lumding Khola / Dudh Koshi",
+    "area_km2": 0.83
+   },
+   {
+    "lake": "Nagma Pokhari",
+    "district": "Taplejung",
+    "river": "Kabeli / Tamor",
+    "area_km2": 0.6
+   }
+  ]
+ },
+ "record": {
+  "note": "Share of recorded events that are melt-linked, by decade. Shown as a share because absolute counts mostly track reporting coverage, not hazard.",
+  "hazards": [
+   "glof",
+   "avalanche",
+   "flash_flood",
+   "debris_flow"
+  ],
+  "by_decade": [
+   {
+    "decade": 1970,
+    "events": 376,
+    "melt_linked": 15,
+    "share_pct": 4.0
+   },
+   {
+    "decade": 1980,
+    "events": 507,
+    "melt_linked": 17,
+    "share_pct": 3.4
+   },
+   {
+    "decade": 1990,
+    "events": 1221,
+    "melt_linked": 32,
+    "share_pct": 2.6
+   },
+   {
+    "decade": 2000,
+    "events": 2834,
+    "melt_linked": 25,
+    "share_pct": 0.9
+   },
+   {
+    "decade": 2010,
+    "events": 3655,
+    "melt_linked": 42,
+    "share_pct": 1.1
+   },
+   {
+    "decade": 2020,
+    "events": 4394,
+    "melt_linked": 26,
+    "share_pct": 0.6
+   }
+  ],
+  "by_hazard": {
+   "glof": {
+    "1970": 0,
+    "1980": 0,
+    "1990": 0,
+    "2000": 0,
+    "2010": 0,
+    "2020": 0
+   },
+   "avalanche": {
+    "1970": 15,
+    "1980": 17,
+    "1990": 32,
+    "2000": 25,
+    "2010": 42,
+    "2020": 25
+   },
+   "flash_flood": {
+    "1970": 0,
+    "1980": 0,
+    "1990": 0,
+    "2000": 0,
+    "2010": 0,
+    "2020": 1
+   },
+   "debris_flow": {
+    "1970": 0,
+    "1980": 0,
+    "1990": 0,
+    "2000": 0,
+    "2010": 0,
+    "2020": 0
+   }
+  }
+ }
+}

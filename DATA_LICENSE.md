@@ -10,6 +10,7 @@ attribute the original providers and cite this project as the compilation.
 | **DesInventar Sentinel — Nepal** (UNDRR) — <https://www.desinventar.net> | Disaster inventory 1971–2013 (district / village level); bundled village & district shapefiles | CC BY 3.0 IGO. Attribute "UNDRR DesInventar Sentinel". |
 | **OCHA Humanitarian Data Exchange — Nepal COD-AB & COD-PS** — <https://data.humdata.org> | Modern admin boundaries (77 districts, 775 municipalities); 2023 district population | CC BY 3.0 / CC BY-IGO (per dataset page). Attribute "OCHA / Survey Department of Nepal". |
 | **NASA Global Landslide Susceptibility** (Stanley & Kirschbaum 2017) — via Resource Watch | Experimental layer A (landslide susceptibility) | Public domain (US Government work). Cite the paper: doi:10.1007/s11069-017-2757-y. |
+| **NASA GISTEMP v4** (250 km land analysis, GHCNv4) | Observed warming in `climate_context.py` | Public domain. Cite Lenssen et al. 2019; GISTEMP Team. |
 | **OpenStreetMap** (dams, weirs, hydropower; via Overpass) | Surge-path sources in `surge_paths.py` | ODbL 1.0. © OpenStreetMap contributors. |
 | **NASA SRTM via AWS Terrain Tiles** | Client-side elevation for the risk check | Public domain (NASA/USGS); tiles courtesy of the AWS Open Data registry. |
 | **NASA GPM IMERG Late daily precipitation** (GES DISC) | Experimental layer C + Alerts panel (recent rainfall) | Public domain (NASA). Cite Huffman et al., GPM IMERG V07. Earthdata login + GES DISC EULA required to download. |

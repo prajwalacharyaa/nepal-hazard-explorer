@@ -1168,6 +1168,7 @@ const AN = {
   glof: undefined,   // cached glof.json (null once fetched-and-missing)
   corr: undefined,   // cached corridors_index.json
   surge: undefined,  // cached surge_paths.json (routed release paths)
+  climate: undefined, // cached climate_context.json
 };
 AN.body = AN.el.querySelector(".an-body");
 
@@ -1200,6 +1201,13 @@ function kmBetween(a, b) {
 }
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const lerp = (a, b, t) => a + (b - a) * t;
+
+async function anLoadClimate() {
+  if (AN.climate !== undefined) return AN.climate;
+  try { AN.climate = await loadJSON(`${window.NHM.DATA}/climate_context.json`); }
+  catch (e) { AN.climate = null; }
+  return AN.climate;
+}
 
 async function anLoadSurge() {
   if (AN.surge !== undefined) return AN.surge;
@@ -1303,8 +1311,8 @@ function anLoadTile(z, x, y) {
 
 /* Sample a square of terrain centred on (lon,lat).
    halfKm = half the box width. Returns { grid, mPerCell, n } or null. */
-async function anSampleTerrain(lon, lat, halfKm) {
-  const z = TERRAIN_Z;
+async function anSampleTerrain(lon, lat, halfKm, zoom) {
+  const z = zoom || TERRAIN_Z;
   const scale = Math.pow(2, z);
   const mPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / scale;
   const halfPx = Math.round((halfKm * 1000) / mPerPx);
@@ -1415,6 +1423,39 @@ function anTerrainStats(t) {
     reliefUp: Math.round(reliefUp),
     slopeDeg: Math.round(slopeDeg * 10) / 10,
     steepNear: Math.round(steepNear * 10) / 10,
+  };
+}
+
+/* How much snow and ice sits in the ground above you.
+
+   This is the link between a warming climate and your spot: meltwater, growing
+   moraine-dammed lakes and thawing frozen ground all originate on the high
+   terrain upstream. A coarse elevation sample over ~18 km answers "is there a
+   cryosphere above me at all?", which decides whether the warming numbers are
+   relevant here or merely true in general. */
+const ICE_M = 5000;        // roughly permanent snow/ice in the Nepal Himalaya
+const SNOW_M = 4000;       // seasonal snow, and where thawing ground matters
+
+function anCryosphere(t) {
+  if (!t) return null;
+  const { grid, n } = t;
+  let peak = -Infinity, ice = 0, snow = 0, count = 0;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const v = grid[j][i];
+      if (v == null) continue;
+      count++;
+      if (v > peak) peak = v;
+      if (v >= ICE_M) ice++;
+      if (v >= SNOW_M) snow++;
+    }
+  }
+  if (!count) return null;
+  return {
+    peak: Math.round(peak),
+    iceFrac: ice / count,
+    snowFrac: snow / count,
+    radiusKm: t.halfKm,
   };
 }
 
@@ -1592,6 +1633,32 @@ function analysePoint(lon, lat, T) {
     }
   }
 
+  // A warming climate does not make flat ground steep or lift you out of a
+  // valley — it loads the melt-driven mechanisms specifically, and only where
+  // there is snow and ice above you to melt in the first place.
+  const cryo = T && T.cryo;
+  const meltUplift = cryo && cryo.iceFrac > 0.01
+    ? Math.min(0.28, cryo.iceFrac * 1.6)
+    : cryo && cryo.snowFrac > 0.05 ? Math.min(0.12, cryo.snowFrac * 0.5) : 0;
+  for (const h of hazards) {
+    if (h.gate < 0.1) continue;                 // still cannot reach you
+    let uplift = 0;
+    if (h.hz === "glof") {
+      // A GLOF's melt driver sits at the lake, not under your feet — you can
+      // be 100 km downstream in a warm valley and still be on its route. Use
+      // the source lake's own trend.
+      const src = surgeGlof && surgeGlof.src;
+      uplift = src && src.trend === "growing" ? 0.25
+        : src ? 0.12 : meltUplift;
+    } else if (["flash_flood", "debris_flow", "avalanche"].indexOf(h.hz) !== -1) {
+      uplift = meltUplift;
+    }
+    if (uplift <= 0) continue;
+    const before = h.score;
+    h.score = clamp01(h.score * (1 + uplift));
+    h.meltUplift = h.score - before;
+  }
+
   hazards.sort((a, b) => b.score - a.score);
   const live = hazards.filter((h) => h.score >= 0.12);
 
@@ -1659,6 +1726,7 @@ function analysePoint(lon, lat, T) {
 
   return {
     outside: false, here, dName, slug: slugify(dName), T,
+    cryo, meltUplift, climate: AN.climate,
     risk, band, verdict, factors,
     hazards, live, rainMM, lakes,
     nearList: near.slice(0, 40),
@@ -1686,15 +1754,23 @@ async function runAnalysis(lon, lat, placeLabel) {
   set("Finding your exact spot…", 14);
   await new Promise((r) => setTimeout(r, 260));
 
-  set("Reading the terrain under you (SRTM)…", 34);
+  set("Reading the terrain under you (SRTM)…", 30);
   let T = null;
   try {
     const sampled = await anSampleTerrain(lon, lat, 2.0);
     if (sampled) T = anTerrainStats(sampled);
   } catch (e) { T = null; }
 
+  set("Looking for snow and ice in the ground above…", 46);
+  try {
+    // coarse, wide sample: is there a cryosphere upstream of this spot?
+    const wide = await anSampleTerrain(lon, lat, 18, 10);
+    if (T && wide) T.cryo = anCryosphere(wide);
+  } catch (e) { /* optional */ }
+
   set("Reading rain over the last few days…", 58);
-  await Promise.all([anLoadGlof(), anLoadCorridors(), anLoadSurge()]);
+  await Promise.all([anLoadGlof(), anLoadCorridors(), anLoadSurge(),
+                     anLoadClimate()]);
   await new Promise((r) => setTimeout(r, 240));
 
   set("Matching hazards to your slope and height…", 82);
@@ -1762,6 +1838,82 @@ function facChip(f) {
   return '<div class="an-fac"><span class="an-fac-dot" style="background:' + dot + '"></span>' +
     '<span class="an-fac-k">' + f.key + '</span>' +
     '<span class="an-fac-t">' + f.text + '</span></div>';
+}
+
+/* "Why this is changing" — the warming context, but only stated where it is
+   actually relevant to this spot, and never dressed up as a prediction. */
+function anClimateSection(d) {
+  const C = d.climate;
+  if (!C || !C.warming) return "";
+  const w = C.warming;
+  const cryo = d.cryo;
+  const melt = d.hazards.filter((h) => h.meltUplift > 0.01);
+
+  const hasIce = cryo && cryo.iceFrac > 0.01;
+  const hasSnow = cryo && cryo.snowFrac > 0.05;
+  const srcLake = d.T && d.T.surge && d.T.surge.src;
+  const growingSource = srcLake && srcLake.trend === "growing";
+
+  let local;
+  if (hasIce) {
+    local = `Ground above ${fmt(ICE_M)} m — permanent snow and ice — covers about ` +
+      `<b>${Math.round(cryo.iceFrac * 100)}%</b> of the catchment within ` +
+      `${cryo.radiusKm} km of you, topping out at <b>${fmt(cryo.peak)} m</b>. ` +
+      `That is the meltwater and the moraine-dammed lakes that feed the ` +
+      `mechanisms above.`;
+  } else if (hasSnow) {
+    local = `No permanent ice above you, but about ` +
+      `<b>${Math.round(cryo.snowFrac * 100)}%</b> of the surrounding ground is ` +
+      `over ${fmt(SNOW_M)} m and takes seasonal snow, peaking at ` +
+      `<b>${fmt(cryo.peak)} m</b>. Warming shifts that from snow to rain, which ` +
+      `runs off immediately instead of being held until spring.`;
+  } else if (growingSource) {
+    local = `No snow or ice in the ground immediately above you — but you sit on ` +
+      `the routed path of <b>${srcLake.name}</b>, a glacial lake that is ` +
+      `<b>growing</b>. The melt driving that growth is ${Math.round(d.T.surge.alongKm)} km ` +
+      `upstream, and the water would arrive here regardless.`;
+  } else {
+    local = `There is no snow or ice in the ground above you ` +
+      `(it peaks at <b>${fmt(cryo ? cryo.peak : 0)} m</b>) and no growing lake ` +
+      `upstream, so melt-driven hazards are not part of this spot's picture — ` +
+      `the warming below is context for the country, not for this location.`;
+  }
+
+  const lk = C.glacial_lakes || {};
+  const growing = (lk.by_trend && lk.by_trend.growing) || 0;
+
+  const upliftLine = melt.length
+    ? `<p class="an-sub">This is why <b>${melt.map((h) => anHazLabel(h.hz).toLowerCase())
+        .join("</b> and <b>")}</b> above ${melt.length === 1 ? "is" : "are"} scored ` +
+      `higher here than the historical record alone would suggest.</p>`
+    : "";
+
+  return '<div class="an-sec"><h3>Why this is changing</h3>' +
+    '<div class="an-climate">' +
+      '<div class="an-cl-stat"><b>' + (w.anomaly_c > 0 ? "+" : "") + w.anomaly_c +
+        '&thinsp;°C</b><span>vs ' + w.baseline + '</span></div>' +
+      '<div class="an-cl-stat"><b>+' + w.freezing_level_shift_m +
+        '&thinsp;m</b><span>freezing level</span></div>' +
+      '<div class="an-cl-stat"><b>' + growing + '/' + (lk.total || 0) +
+        '</b><span>lakes growing</span></div>' +
+    '</div>' +
+    '<p class="an-sub">' + local + '</p>' +
+    upliftLine +
+    '<p class="an-note">Nepal has warmed <b>' + w.anomaly_c + '&thinsp;°C</b> against its ' +
+      w.baseline + ' baseline and is warming <b>' +
+      w.trend_c_per_decade.since_1995 + '&thinsp;°C per decade</b> since 1995 — faster ' +
+      'than the ' + w.trend_c_per_decade.since_1951 + ' of the second half of the ' +
+      'last century. At a standard lapse rate that lifts the freezing level about ' +
+      w.freezing_level_shift_m + '&thinsp;m, so slopes that used to collect snow now ' +
+      'shed rain, and glacial lakes grow behind moraine dams nobody engineered. ' +
+      'Source: ' + w.source + '.</p>' +
+    '<p class="an-note">Our own record cannot confirm a rising trend in these ' +
+      'hazards: melt-linked events are a <i>falling</i> share of all recorded ' +
+      'events, but that is because flood and landslide reporting grew enormously ' +
+      'after 2011 while remote high-altitude events stayed under-reported. Small ' +
+      'numbers, uneven coverage — the physics above is the better guide than the ' +
+      'count.</p>' +
+  '</div>';
 }
 
 function renderAnalysis(d) {
@@ -1857,6 +2009,8 @@ function renderAnalysis(d) {
     '<div class="an-sec"><h3>What could actually happen here</h3>' + hazRows +
       '<p class="an-note">Ranked by how possible each is <em>at your spot</em> — a record ' +
       'nearby only counts if the terrain under you could produce the same thing.</p></div>' +
+
+    anClimateSection(d) +
 
     '<div class="an-sec"><h3>Affected area around you</h3>' +
       '<div class="an-map-box" id="an-map-box"></div>' +

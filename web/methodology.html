@@ -184,6 +184,32 @@
       per-hazard radius (landslide 2&nbsp;km, flood 2.5&nbsp;km, flash flood
       3&nbsp;km, GLOF 6&nbsp;km). Recent IMERG rainfall multiplies what is
       already plausible rather than counting as risk by itself.</p>
+    <p><b>A warming climate, where it is actually relevant.</b> A check that
+      only looks backwards assumes the past is a fair guide, and for snow- and
+      ice-driven hazards in Nepal it is not.
+      <code>pipeline/climate_context.py</code> derives a small set of observed
+      numbers from NASA GISTEMP's 250&nbsp;km land analysis: Nepal has warmed
+      about <b>1.4&nbsp;°C</b> against its 1951–1980 baseline and is warming
+      <b>0.35&nbsp;°C per decade since 1995</b>, against 0.18 over the second
+      half of the last century. Expressed at a standard 6.5&nbsp;°C/km lapse
+      rate, that is roughly <b>+220&nbsp;m</b> of freezing level — slopes that
+      collected snow now shed rain, and 8 of the 10 lakes in the curated
+      inventory are growing.</p>
+    <p>That only changes a score where it can physically act. The check takes a
+      second, coarse elevation sample over ~18&nbsp;km to ask whether there is
+      any snow or ice in the ground above you; where there is none, the warming
+      is reported as national context and changes nothing. Where there is, it
+      lifts the melt-driven mechanisms only — GLOF, flash flood, debris flow,
+      avalanche — never slope failure or river flooding, which warming does not
+      drive. For a GLOF the driver is taken from the <i>source lake's</i> trend
+      rather than the ground under you, since you can be 100&nbsp;km downstream
+      in a warm valley and still be on its route.</p>
+    <p>One honest negative: our own record does <b>not</b> show these hazards
+      rising. Melt-linked events are a falling share of all recorded events —
+      but flood and landslide reporting grew enormously after 2011 while remote
+      high-altitude events stayed under-reported, and the absolute numbers are
+      small. The record cannot answer the question; it is reported as it stands
+      rather than presented as evidence either way.</p>
     <p>Limits worth stating plainly: SRTM is 30&nbsp;m and dates from 2000, so
       it misses embankments, flood walls, river training and anything built
       since; the score is comparative, not a probability; and it is not a
@@ -237,6 +263,8 @@
         <code>rain.json</code></li>
       <li><code>surge_paths.json</code> — routed downstream release paths from
         glacial lakes, dams, weirs and hydropower</li>
+      <li><code>climate_context.json</code> — observed warming, freezing-level
+        shift, glacial-lake trend, melt-linked share of the record</li>
       <li><code>meta.json</code> — build date, counts, span, latest event</li>
     </ul>
     <p>The map's download button exports whatever is currently filtered as CSV +
