@@ -1,21 +1,11 @@
-"""Why the hazard is changing: warming, melt, and what that does downstream.
+"""Observed warming over Nepal, for the melt-driven part of the risk check.
 
-A risk check that only looks at the past assumes the past is a fair guide. For
-snow- and ice-driven hazards in Nepal it is not: the mountains are warming
-faster than the global mean, the freezing level is climbing, glacial lakes are
-growing behind moraine dams that were never engineered, and terrain that used
-to shed snow now sheds water.
+Treating the past as a fair guide breaks down for snow and ice: the freezing
+level is climbing and the lakes are growing. This pulls the few numbers needed
+to say that with a citation — GISTEMP warming, the implied freezing-level
+shift, lake trend, and how melt-linked hazards show up in our own record.
 
-This produces the small, citable set of numbers the risk check needs to say so:
-
-  * observed warming over Nepal, from NASA GISTEMP's 250 km land analysis
-  * the freezing-level shift that implies, at a standard lapse rate
-  * how the curated glacial-lake inventory is trending
-  * how melt-linked hazards (GLOF, avalanche, flash flood, debris flow) appear
-    in our own record by decade
-
-Everything here is observational or simple arithmetic on observations. Nothing
-is projected forward: no scenario, no model run, no claim about a given year.
+Observations and arithmetic on observations only. No scenarios, no projections.
 
 Inputs : data/raw/gistemp250_GHCNv4.nc   (downloaded once; --refresh refetches)
          data/raw/dangerous_lakes.csv

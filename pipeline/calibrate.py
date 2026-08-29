@@ -1,11 +1,9 @@
-"""Back-test the terrain gates against the record, and fit them to it.
+"""Sanity-check the terrain gates against the event record.
 
-The risk check gates every hazard on terrain: flooding needs low ground,
-landslides need slope, and so on. Those thresholds were a judgement call. This
-asks the record whether they are right, and replaces them with coefficients
-fitted to it.
+The gate thresholds in web/app.js (anGate) were set by judgement. This asks the
+record whether they point the right way.
 
-Method, and its honest weaknesses:
+Method and its weaknesses:
 
   positives   locations of recorded events of one hazard type, exact
               coordinates only (centroid-placed records would teach the model

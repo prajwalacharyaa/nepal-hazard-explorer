@@ -1,19 +1,13 @@
-"""Areas under an active alert, and the decay that removes them again.
+"""Post-event alerts that expire on their own.
 
-When something serious happens, the places it hit are at raised risk for a
-while afterwards for reasons the terrain cannot see: saturated ground, a
-blocked or re-routed channel, debris still perched upslope, damaged
-infrastructure, displaced people in temporary shelter. That state is real, and
-it fades.
+For a while after a bad event the area stays riskier than its terrain implies:
+saturated ground, blocked channels, debris still perched upslope, damaged
+roads. Real, and temporary.
 
-So alerts are DERIVED, not hand-maintained: any recorded event above a severity
-threshold raises an alert over its district and municipality, which steps down
-through high -> elevated -> watch and then expires on its own. Run this daily
-and alerts appear wherever the next serious event lands and disappear from
-wherever the last one did, with nobody editing a list.
-
-A hand-written file (data/raw/manual_alerts.csv) can add or extend an alert for
-something the automated feed has not caught up with yet. Those still expire.
+Alerts are derived from the event feed rather than hand-maintained, so run this
+daily and they show up wherever the next serious event lands and clear on their
+own. data/raw/manual_alerts.csv can add one the feed has not caught yet; those
+expire too.
 
 Inputs : data/processed/events.geojson
          data/raw/manual_alerts.csv          (optional)
