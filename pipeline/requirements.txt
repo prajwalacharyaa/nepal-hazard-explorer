@@ -12,3 +12,4 @@ rasterio>=1.3
 rasterstats>=0.19
 xarray>=2024.3
 h5netcdf>=1.3
+h5py>=3.11

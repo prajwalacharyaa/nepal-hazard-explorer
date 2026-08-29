@@ -38,9 +38,10 @@ const geolocate = new maplibregl.GeolocateControl({
 
 // Desktop keeps everything bottom-right. On phones the bottom-right corner is
 // where the thumb and the bottom sheet live, so put the info ("i") and the
-// locate button top-right instead — info first so it sits above locate.
+// locate button top-right instead. The OpenStreetMap "i" goes top-left, clear
+// of both the alert button (top-right) and the thumb zone.
 if (matchMedia("(max-width: 899px)").matches) {
-  map.addControl(new maplibregl.AttributionControl({ compact: true }), "top-right");
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), "top-left");
   map.addControl(geolocate, "top-right");
   map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), "bottom-right");
 } else {

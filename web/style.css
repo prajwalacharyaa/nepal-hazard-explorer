@@ -1352,8 +1352,9 @@ body.impact { height: 100%; overflow: hidden; }
 }
 #area-card .cta.ghost:hover { background: var(--accent-soft); }
 
-/* mobile: info ("i") + locate controls stacked top-right */
+/* mobile: OpenStreetMap "i" goes top-left; locate button top-right */
 @media (max-width: 899px) {
+  .maplibregl-ctrl-top-left { top: 12px; left: 12px; }
   .maplibregl-ctrl-top-right { top: 12px; right: 12px; }
   .maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 0 0 10px auto; }
   .maplibregl-ctrl-bottom-right { bottom: 10px; right: 10px; }

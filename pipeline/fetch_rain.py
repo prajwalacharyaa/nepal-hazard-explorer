@@ -23,8 +23,24 @@ from datetime import date, timedelta
 import numpy as np
 import requests
 
-from config import PROCESSED
+from config import ROOT, PROCESSED
 
+
+def _load_env():
+    """Minimal .env reader so a local run needs no shell export. Looks at the
+    repo root and pipeline/ .env; real environment variables still win."""
+    for f in (ROOT / ".env", ROOT / "pipeline" / ".env"):
+        if not f.exists():
+            continue
+        for line in f.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+_load_env()
 TOKEN = os.environ.get("EARTHDATA_TOKEN", "").strip()
 BASE = ("https://data.gesdisc.earthdata.nasa.gov/data/GPM_L3/GPM_3IMERGDL.07/"
         "{y}/{m:02d}/3B-DAY-L.MS.MRG.3IMERG.{y}{m:02d}{d:02d}-S000000-E235959.V07{rev}.nc4")

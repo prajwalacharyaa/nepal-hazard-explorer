@@ -77,6 +77,18 @@ python fetch_rain.py         # -> rain.json           (needs EARTHDATA_TOKEN + E
 # NASA GLC and HDX boundaries/population are optional add-ons (see DATA_SOURCES.md).
 ```
 
+### The rainfall layer (optional)
+
+`fetch_rain.py` needs a NASA Earthdata token. Put it in a `.env` file at the
+repo root (copy `.env.example`), then:
+
+```bash
+pip install -r pipeline/requirements.txt   # first time — pulls xarray/h5netcdf/h5py
+cd pipeline && python fetch_rain.py        # writes data/processed/rain.json
+```
+
+No token -> it exits cleanly and the Alerts panel shows "not configured".
+
 ### Run it locally
 
 ```bash
