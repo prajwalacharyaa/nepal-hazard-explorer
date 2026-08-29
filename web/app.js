@@ -1,7 +1,7 @@
 /* Main map: 4 views + "find your area" (near-me / search / click). */
 const { HAZARD_COLORS, HAZARD_LABELS, SEV_COLORS, THEME, MAP_STYLE, paths,
         slugify, loadJSON, fmt, hazardName, readableDate, eventsToCSV, download,
-        toast, fatalError } = window.NHM;
+        toast, fatalError, simplifyBasemap } = window.NHM;
 
 if (location.protocol === "file:") {
   fatalError(
@@ -37,7 +37,7 @@ window.__map = map;                       // handy when debugging in the console
    genuinely never finishes loading. */
 let mapReady = false;
 const markReady = () => { mapReady = true; };
-map.on("load", markReady);
+map.on("load", () => { markReady(); simplifyBasemap(map); });
 map.on("idle", markReady);
 map.on("sourcedata", (e) => { if (e.isSourceLoaded) markReady(); });
 map.on("error", (e) => {

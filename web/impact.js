@@ -2,7 +2,7 @@
    Zooms to the event and its downstream corridor, animates flow along the
    path, and lists what lies downstream. */
 const { HAZARD_COLORS, THEME, MAP_STYLE, paths, slugify, loadJSON, fmt,
-        hazardName, readableDate, toast, fatalError } = window.NHM;
+        hazardName, readableDate, toast, fatalError, simplifyBasemap } = window.NHM;
 
 const qs = new URLSearchParams(location.search);
 const ID = qs.get("id");
@@ -87,6 +87,15 @@ function renderCorridorPanel() {
       (CORRIDOR.reference ? `<br><span class="ref">${CORRIDOR.reference}</span>` : "")
     : `<b>Modelled reach.</b> ${CORRIDOR.source_note || ""}`;
 
+  // explain the gap between the event marker and the start of the river reach
+  if (CORRIDOR.snap_km > 0.05) {
+    note.insertAdjacentHTML("beforeend",
+      `<br><span class="ref">The event sits ${CORRIDOR.snap_km} km from the nearest ` +
+      `mapped river; that link is drawn as a dotted line. Smaller streams are ` +
+      `below the river dataset's threshold, so the true route to the channel is ` +
+      `not mapped.</span>`);
+  }
+
   if (CORRIDOR.elevation && CORRIDOR.elevation.length > 3) {
     document.getElementById("i-profile-field").hidden = false;
     drawProfile(CORRIDOR.elevation);
@@ -158,6 +167,7 @@ function buildMap() {
   const tryAddLayers = () => {
     if (layersAdded || !map.isStyleLoaded()) return;
     layersAdded = true;
+    try { simplifyBasemap(map); } catch (e) { /* cosmetic */ }
     try { addLayers(); } catch (e) { console.error("[impact] addLayers", e); }
   };
   map.on("load", tryAddLayers);
@@ -200,6 +210,20 @@ function buildMap() {
           // dashed when the length is modelled, solid when it is documented
           ...(CORRIDOR.documented_reach ? {} : { "line-dasharray": [2, 1.4] }),
         } });
+
+      // Overland link from the event to the nearest mapped river. Drawn thin
+      // and dotted because it is a straight-line stand-in, not a channel:
+      // HydroRIVERS omits streams below its drainage threshold.
+      if (CORRIDOR.connector && CORRIDOR.snap_km > 0.05) {
+        map.addSource("connector", { type: "geojson", data: {
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: CORRIDOR.connector } } });
+        map.addLayer({ id: "connector-line", type: "line", source: "connector",
+          layout: { "line-cap": "round" },
+          paint: { "line-color": col, "line-opacity": 0.55,
+            "line-dasharray": [1, 1.6],
+            "line-width": ["interpolate", ["linear"], ["zoom"], 7, 1.4, 12, 2.6] } });
+      }
 
       // explicit end-of-reach marker so the covered span reads as source -> end
       const endPt = CORRIDOR.path[CORRIDOR.path.length - 1];
@@ -269,7 +293,7 @@ function buildMap() {
 
 function fitCorridor(animate = true) {
   if (!CORRIDOR || !CORRIDOR.path.length) return;
-  const b = CORRIDOR.path.reduce(
+  const b = flowPath().reduce(
     (a, c) => [Math.min(a[0], c[0]), Math.min(a[1], c[1]),
                Math.max(a[2], c[0]), Math.max(a[3], c[1])],
     [180, 90, -180, -90]);
@@ -314,6 +338,16 @@ function atFraction(path, cum, t) {
   return { pt, trail: path.slice(0, i).concat([pt]) };
 }
 
+/* the animated route includes the overland link so the flow starts at the
+   event itself rather than jumping to the river */
+function flowPath() {
+  if (!CORRIDOR) return [];
+  const c = CORRIDOR.connector;
+  return c && CORRIDOR.snap_km > 0.05
+    ? [c[0]].concat(CORRIDOR.path)
+    : CORRIDOR.path;
+}
+
 function stopFlow() {
   if (anim) { cancelAnimationFrame(anim); anim = null; }
   document.getElementById("i-play").textContent = "▶ Play flow";
@@ -334,7 +368,7 @@ document.getElementById("i-play").onclick = () => {
   if (!CORRIDOR || !map.getSource("trail")) {
     return toast("The corridor is still loading — try again in a moment.");
   }
-  const path = CORRIDOR.path;
+  const path = flowPath();
   if (path.length < 2) return;
 
   const cum = cumulative(path);

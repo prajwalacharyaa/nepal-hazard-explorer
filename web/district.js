@@ -124,6 +124,7 @@ async function renderMiniMap() {
   });
   m.addControl(new maplibregl.NavigationControl({ showCompass: false }));
   m.on("load", async () => {
+    try { window.NHM.simplifyBasemap(m, { mask: false }); } catch (e) { /* cosmetic */ }
     m.addSource("pts", { type: "geojson",
       data: { type: "FeatureCollection", features: FEATURES } });
     m.addLayer({

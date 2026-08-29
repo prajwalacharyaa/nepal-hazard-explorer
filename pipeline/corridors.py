@@ -155,10 +155,22 @@ def main():
             continue
         # a documented reach length overrides the severity-based estimate
         budget = (cur["trace_km"] if cur else budget_km(p)) * 1000.0
+        start_id = int(row.HYRIV_ID)
         line, length_km = trace_downstream(
-            int(row.HYRIV_ID), geom, nxt, budget, row.geometry)
+            start_id, geom, nxt, budget, row.geometry)
         if line is None or length_km < 0.5:
             continue
+
+        # HydroRIVERS only maps rivers above a drainage threshold, so the event
+        # can sit some way from the nearest mapped channel (median ~0.8 km).
+        # Record that overland link explicitly rather than leaving a silent gap.
+        snap_m = float(getattr(row, "snap_m", 0) or 0)
+        start_reach = geom[start_id]
+        snap_pt = start_reach.interpolate(start_reach.project(row.geometry))
+        cx, cy = TO_WGS.transform([row.geometry.x, snap_pt.x],
+                                  [row.geometry.y, snap_pt.y])
+        connector = [[round(cx[0], 4), round(cy[0], 4)],
+                     [round(cx[1], 4), round(cy[1], 4)]]
 
         # municipalities the corridor crosses
         hit, seen_pal = [], set()
@@ -197,6 +209,8 @@ def main():
                                  "estimate, not an observed inundation extent."),
             "reference": cur.get("reference") if cur else None,
             "length_km": round(length_km, 1),
+            "snap_km": round(snap_m / 1000.0, 2),
+            "connector": connector,
             "path": coords,
             "palikas": hit[:20],
             "nearby_events": near,

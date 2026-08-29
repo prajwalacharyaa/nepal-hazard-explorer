@@ -165,6 +165,85 @@
   /* Basemap style — light, matches the UI. */
   const MAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
 
+  /* ---------------------------------------------------------------------
+     Basemap de-clutter.
+
+     The default style carries street names, road casings, POIs and transit —
+     detail that competes with the hazard data at the zooms this tool is used
+     at. We hide those, keep water, terrain, boundaries and settlement names,
+     and fade everything outside Nepal behind a mask so the country reads as
+     the subject rather than one country among several.
+     Call once, after the style has loaded.
+     --------------------------------------------------------------------- */
+  const CLUTTER = /road|street|bridge|tunnel|motorway|highway|transit|railway|rail|aeroway|airport|poi|place_of|building|housenum|ferry|pier|path|track|cycle/i;
+  // settlement labels worth keeping, even though they match nothing above
+  const KEEP_LABEL = /country|state|continent|city|town|village|place|water_name|waterway_name/i;
+
+  function simplifyBasemap(map, opts = {}) {
+    const layers = (map.getStyle() && map.getStyle().layers) || [];
+    for (const l of layers) {
+      const id = l.id || "";
+      if (KEEP_LABEL.test(id)) continue;
+      if (CLUTTER.test(id)) {
+        try { map.setLayoutProperty(id, "visibility", "none"); } catch (e) { /* not ours */ }
+      }
+    }
+    if (opts.mask !== false) addNepalMask(map);
+    if (opts.foreignLabels !== true) hideForeignLabels(map);
+  }
+
+  /* Drop place and water names outside Nepal.
+
+     The vector tiles carry no country field on city labels, so filter each
+     label layer geometrically with MapLibre's `within` expression against a
+     coarse national hull (95 vertices, cheap to evaluate). This removes
+     neighbouring names precisely while leaving the surrounding terrain
+     visible — unlike simply fading everything out. */
+  const LABEL_LAYERS = [
+    "label_other", "label_city", "label_city_capital", "label_town",
+    "label_village", "label_state", "label_country_1", "label_country_2",
+    "label_country_3", "water_name_point_label", "water_name_line_label",
+    "waterway_line_label",
+  ];
+
+  function hideForeignLabels(map) {
+    fetch(`${DATA}/nepal_hull.json`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((hull) => {
+        for (const id of LABEL_LAYERS) {
+          if (!map.getLayer(id)) continue;
+          try {
+            const prev = map.getFilter(id);
+            const within = ["within", hull];
+            map.setFilter(id, prev ? ["all", prev, within] : within);
+          } catch (e) { /* layer not filterable; leave it alone */ }
+        }
+      })
+      .catch(() => { /* cosmetic only */ });
+  }
+
+  /* Fade the world outside Nepal. The mask is the world with the country
+     punched out, so nothing inside the border is touched. */
+  function addNepalMask(map) {
+    if (map.getSource("nepal-mask")) return;
+    fetch(`${DATA}/nepal_mask.geojson`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((mask) => {
+        if (map.getSource("nepal-mask")) return;
+        map.addSource("nepal-mask", { type: "geojson", data: mask });
+        map.addLayer({ id: "nepal-mask", type: "fill", source: "nepal-mask",
+          paint: { "fill-color": "#f5f7fa", "fill-opacity": 0.55 } });
+        return fetch(`${DATA}/nepal_outline.geojson`).then((r) => r.json());
+      })
+      .then((outline) => {
+        if (!outline || map.getSource("nepal-outline")) return;
+        map.addSource("nepal-outline", { type: "geojson", data: outline });
+        map.addLayer({ id: "nepal-outline", type: "line", source: "nepal-outline",
+          paint: { "line-color": "#94a3b8", "line-width": 1.1, "line-opacity": 0.9 } });
+      })
+      .catch(() => { /* mask is cosmetic; never block the map on it */ });
+  }
+
   /* Toast: brief, non-blocking confirmation (replaces alert()). */
   function toast(msg, ms = 3200) {
     let t = document.getElementById("nhm-toast");
@@ -181,7 +260,8 @@
   }
 
   window.NHM = {
-    DATA, HAZARD_COLORS, HAZARD_LABELS, SEV_COLORS, THEME, MAP_STYLE, paths,
+    DATA, HAZARD_COLORS, HAZARD_LABELS, SEV_COLORS, THEME, MAP_STYLE,
+    simplifyBasemap, paths,
     slugify, loadJSON, fmt, hazardName, readableDate, eventsToCSV, download,
     stampMeta, toast, fatalError,
   };

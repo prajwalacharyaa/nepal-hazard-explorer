@@ -70,6 +70,7 @@ function render(feat, siblings) {
   });
   m.addControl(new maplibregl.NavigationControl({ showCompass: false }));
   m.on("load", () => {
+    try { window.NHM.simplifyBasemap(m, { mask: false }); } catch (e) { /* cosmetic */ }
     m.addSource("pt", { type: "geojson", data: feat });
     m.addLayer({
       id: "pt", type: "circle", source: "pt",
