@@ -1249,7 +1249,8 @@ function nearestSurge(lon, lat, kinds) {
       if (i) along += kmBetween(r.path[i - 1], r.path[i]);
       const d = kmBetween([lon, lat], r.path[i]);
       if (!best || d < best.km) {
-        best = { km: d, alongKm: along, src: r };
+        best = { km: d, alongKm: along, src: r, idx: i,
+                 travelMin: r.travel_min ? r.travel_min[i] : null };
       }
     }
   }
@@ -1781,6 +1782,15 @@ async function runAnalysis(lon, lat, placeLabel) {
 }
 
 /* dam_release is our own synthetic hazard, so it needs its own label/colour */
+/* Travel time, phrased so nobody reads it as a countdown. */
+function anWarning(min) {
+  if (min == null) return "";
+  if (min < 10) return "under 10 minutes";
+  if (min < 90) return `roughly ${Math.round(min / 5) * 5} minutes`;
+  const h = min / 60;
+  return h < 10 ? `roughly ${h.toFixed(1)} hours` : `many hours`;
+}
+
 const anHazLabel = (hz) => hz === "dam_release" ? "Dam or weir release" : hazardName(hz);
 const anHazColor = (hz) => hz === "dam_release" ? "#7c3aed" : (HAZARD_COLORS[hz] || "#888");
 
@@ -1792,23 +1802,30 @@ function anMechanism(h, d) {
     case "glof": {
       const S = h.surge || (T && T.surge);
       if (!S) return "A moraine- or ice-dammed lake fails upstream and the surge travels down the valley.";
+      const w = anWarning(S.travelMin);
+      const grew = S.src.growth_pct != null && S.src.growth_pct > 5
+        ? ` It grew <b>${S.src.growth_pct.toFixed(0)}%</b> in mapped area between ` +
+          `2016 and 2022${S.src.km2 ? `, and now covers ${S.src.km2} km²` : ""}.`
+        : S.src.km2 ? ` It covers about ${S.src.km2} km².` : "";
       return `${S.src.name} sits about ${S.alongKm.toFixed(0)} km upstream along ` +
         `this channel. If its dam failed — overtopped by an ice or rock fall into ` +
         `the lake, or eroded through the moraine — the surge would route down ` +
         (S.src.river ? S.src.river : "this river") +
-        `, reaching here in well under an hour and arriving as a wall of water ` +
-        `and debris rather than a rising river.`;
+        (w ? `, reaching here in <b>${w}</b>` : "") +
+        `, arriving as a wall of water and debris rather than a rising river.` + grew;
     }
     case "dam_release": {
       const S = h.surge;
       const who = /^unnamed/i.test(S.src.name)
         ? `An ${S.src.detail}` : `${S.src.name} (${S.src.detail})`;
+      const w2 = anWarning(S.travelMin);
       return `${who} sits about ${S.alongKm.toFixed(0)} km ` +
-        `upstream. A structure can release suddenly — a gate opening, an ` +
-        `overtopping during a flood peak, or a failure — and anything arriving ` +
-        `from further upstream, including an outburst, hits the impoundment ` +
-        `first. Being ${T ? T.hand : "?"} m above the channel is what decides ` +
-        `whether that reaches you.`;
+        `upstream${w2 ? ` — a release would reach here in <b>${w2}</b>` : ""}. ` +
+        `A structure can release suddenly — a gate opening, an overtopping ` +
+        `during a flood peak, or a failure — and anything arriving from further ` +
+        `upstream, including an outburst, hits the impoundment first. Being ` +
+        `${T ? T.hand : "?"} m above the channel is what decides whether that ` +
+        `reaches you.`;
     }
     case "landslide":
       return `Prolonged or intense rain saturates the slope until it fails. ` +
@@ -1880,7 +1897,9 @@ function anClimateSection(d) {
   }
 
   const lk = C.glacial_lakes || {};
-  const growing = (lk.by_trend && lk.by_trend.growing) || 0;
+  const inv = C.inventory;
+  const growing = inv ? inv.grown_over_10pct : ((lk.by_trend && lk.by_trend.growing) || 0);
+  const lakeTotal = inv ? inv.with_growth_measured : (lk.total || 0);
 
   const upliftLine = melt.length
     ? `<p class="an-sub">This is why <b>${melt.map((h) => anHazLabel(h.hz).toLowerCase())
@@ -1894,8 +1913,8 @@ function anClimateSection(d) {
         '&thinsp;°C</b><span>vs ' + w.baseline + '</span></div>' +
       '<div class="an-cl-stat"><b>+' + w.freezing_level_shift_m +
         '&thinsp;m</b><span>freezing level</span></div>' +
-      '<div class="an-cl-stat"><b>' + growing + '/' + (lk.total || 0) +
-        '</b><span>lakes growing</span></div>' +
+      '<div class="an-cl-stat"><b>' + growing + '/' + lakeTotal +
+        '</b><span>lakes grown &gt;10%</span></div>' +
     '</div>' +
     '<p class="an-sub">' + local + '</p>' +
     upliftLine +

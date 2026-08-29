@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -39,6 +40,9 @@ from shapely.geometry import Point
 from shapely.ops import transform
 from pyproj import Transformer
 
+import numpy as np
+
+import terrain
 from config import RAW, PROCESSED
 from corridors import load_rivers, trace_downstream, METRIC
 
@@ -49,12 +53,50 @@ TO_METRIC = Transformer.from_crs(4326, METRIC, always_xy=True)
 # destructive for a very long way (the 1985 Dig Tsho flood scoured ~40 km; the
 # 2026 Langtang cascade was reported ~100 km), so we trace far and let the
 # frontend decide how much attenuation to assume with distance.
-GLOF_KM = 200.0
+GLOF_KM = 200.0            # the ten curated lakes, documented far downstream
+GLOF_AUTO_KM = 110.0       # every other mapped lake, from the HMA inventory
 DAM_KM = 45.0
 SIMPLIFY_M = 250.0            # path geometry tolerance; keeps the file small
 
 # Overpass mirrors, tried in order. The public instances rate-limit hard and
 # reject a default requests User-Agent, so both are handled.
+# --- travel time -----------------------------------------------------------
+# How fast a surge front moves is mostly a question of channel slope. A
+# Manning-type relation, v = (1/n) R^(2/3) sqrt(S), with a boulder mountain
+# channel (n = 0.05) and a hydraulic radius of ~3 m for a large flood wave,
+# gives ~9 m/s in a steep gorge and ~1.5 m/s across the plains — the right
+# order for documented GLOF fronts. It is an estimate of the FRONT, not of the
+# peak, and it ignores storage, breach growth and channel roughness that
+# actually varies. Treat it as "tens of minutes", never as a countdown.
+MANNING_N = 0.05
+HYDRAULIC_R = 3.0
+V_MIN, V_MAX = 1.5, 15.0          # m/s, clamps on the relation
+S_MIN = 1e-4                      # SRTM noise floor; flat is not zero-slope
+
+
+def travel_minutes(path, elev):
+    """Cumulative minutes from the source to each vertex along the path."""
+    out = [0.0]
+    for i in range(1, len(path)):
+        # planar metres between the two vertices
+        lon1, lat1 = path[i - 1]
+        lon2, lat2 = path[i]
+        mlat = math.radians((lat1 + lat2) / 2)
+        dx = (lon2 - lon1) * 111320.0 * math.cos(mlat)
+        dy = (lat2 - lat1) * 110540.0
+        d = math.hypot(dx, dy)
+        if d < 1:
+            out.append(out[-1])
+            continue
+        e1, e2 = elev[i - 1], elev[i]
+        drop = (e1 - e2) if (math.isfinite(e1) and math.isfinite(e2)) else 0.0
+        slope = max(S_MIN, drop / d)          # uphill noise -> the floor
+        v = (1.0 / MANNING_N) * (HYDRAULIC_R ** (2.0 / 3.0)) * math.sqrt(slope)
+        v = min(V_MAX, max(V_MIN, v))
+        out.append(out[-1] + (d / v) / 60.0)
+    return out
+
+
 OVERPASS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -149,7 +191,12 @@ def osm_sources(data):
 
 
 def lake_sources():
-    rows = []
+    """Curated lakes first, then every routable lake from the HMA inventory.
+
+    The curated ten carry documented reach and references; the inventory adds
+    the ~150 others large enough to matter, each with its measured 2016-2022
+    area change so the frontend can say whether it is growing."""
+    rows, seen = [], set()
     with open(RAW / "dangerous_lakes.csv", encoding="utf-8") as fh:
         for r in csv.DictReader(fh):
             rows.append({
@@ -161,7 +208,40 @@ def lake_sources():
                 "river": r.get("downstream_river", ""),
                 "trend": r.get("trend", ""),
                 "past_glof": r.get("past_glof", ""),
+                "curated": True,
+                "budget_km": GLOF_KM,
                 "source": "ICIMOD/UNDP PDGL inventory (curated)",
+            })
+            seen.add((round(float(r["lon"]), 2), round(float(r["lat"]), 2)))
+
+    inv = PROCESSED / "glacial_lakes.json"
+    if inv.exists():
+        data = json.loads(inv.read_text(encoding="utf-8"))
+        for lk in data.get("lakes", []):
+            if not lk.get("route"):
+                continue
+            key = (round(lk["lon"], 2), round(lk["lat"], 2))
+            if key in seen:                     # already covered by a curated row
+                continue
+            seen.add(key)
+            g = lk.get("growth_pct")
+            trend = ("growing" if g is not None and g > 10
+                     else "shrinking" if g is not None and g < -10
+                     else "stable" if g is not None else "unknown")
+            rows.append({
+                "id": f"hma-{lk['id']}",
+                "kind": "glacial_lake",
+                "name": lk.get("name") or f"glacial lake at {lk['elev_m']} m",
+                "lon": lk["lon"], "lat": lk["lat"],
+                "detail": f"glacial lake, {lk['km2']} km2 at {lk['elev_m']} m",
+                "river": lk.get("river", ""),
+                "trend": trend,
+                "growth_pct": g,
+                "km2": lk["km2"],
+                "elev_m": lk["elev_m"],
+                "past_glof": "",
+                "budget_km": GLOF_AUTO_KM,
+                "source": "HMA glacial lake inventory 2016-2024 (Zenodo 17948783, CC-BY-4.0)",
             })
     rows.sort(key=lambda r: r["id"])
     return rows
@@ -198,9 +278,21 @@ def route(src, gdf, geom, nxt, budget_km):
         return None
 
     rec = dict(src)
+    rec.pop("budget_km", None)
     rec["path"] = path
     rec["length_km"] = round(km, 1)
     rec["snap_km"] = round(snap_m / 1000.0, 2)
+
+    # elevation along the route, then how long a front takes to run it
+    try:
+        elev = terrain.elevation(path)
+        mins = travel_minutes(path, elev)
+        rec["travel_min"] = [int(round(m)) for m in mins]
+        rec["travel_total_min"] = int(round(mins[-1]))
+        drop = float(np.nanmax(elev) - np.nanmin(elev)) if len(elev) else 0.0
+        rec["drop_m"] = int(round(drop))
+    except Exception:
+        pass                                   # elevation is a bonus, not a gate
     return rec
 
 
@@ -222,7 +314,9 @@ def main():
     dams = osm_sources(fetch_osm(args.refresh))
 
     out = []
-    for src, budget in [(s, GLOF_KM) for s in lakes] + [(s, DAM_KM) for s in dams]:
+    jobs = ([(s, s.get("budget_km", GLOF_KM)) for s in lakes] +
+            [(s, DAM_KM) for s in dams])
+    for src, budget in jobs:
         rec = route(src, gdf, geom, nxt, budget)
         if rec:
             out.append(rec)

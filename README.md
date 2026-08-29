@@ -69,6 +69,11 @@ python fetch_rivers.py       # HydroRIVERS Asia -> hydrorivers_nepal.gpkg (~79 M
 python corridors.py          # -> corridors/<event id>.json + corridors_index.json
 python climate_context.py    # -> climate_context.json (observed warming from
                              #    NASA GISTEMP, freezing-level shift, lake trend)
+python glacial_lakes.py      # -> glacial_lakes.json (every mapped lake in Nepal
+                             #    with its measured 2016->2022 area change;
+                             #    needs the HMA inventory, see DATA_SOURCES §9)
+python calibrate.py          # -> risk_model.json  (back-tests the terrain gates
+                             #    against the event record; needs scikit-learn)
 python surge_paths.py        # -> surge_paths.json  (routes a glacial-lake /
                              #    dam release would take downstream; --refresh
                              #    refetches dams from OpenStreetMap)

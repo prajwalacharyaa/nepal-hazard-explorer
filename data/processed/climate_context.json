@@ -74,6 +74,14 @@
    }
   ]
  },
+ "inventory": {
+  "source": "Inventory of Glacial Lakes in High Mountain Asia, median extents for 2016-2017 and 2022-2024 (Zenodo 17948783, CC-BY-4.0)",
+  "total": 306,
+  "with_growth_measured": 290,
+  "grown_over_10pct": 51,
+  "shrunk_over_10pct": 4,
+  "median_growth_pct": 1.7
+ },
  "record": {
   "note": "Share of recorded events that are melt-linked, by decade. Shown as a share because absolute counts mostly track reporting coverage, not hazard.",
   "hazards": [

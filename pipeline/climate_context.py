@@ -136,6 +136,23 @@ def lakes():
     }
 
 
+def inventory_summary():
+    """Measured lake change from the full HMA inventory, if it has been built."""
+    src = PROCESSED / "glacial_lakes.json"
+    if not src.exists():
+        return None
+    d = json.loads(src.read_text(encoding="utf-8"))
+    c = d.get("counts", {})
+    return {
+        "source": d.get("source"),
+        "total": c.get("total"),
+        "with_growth_measured": c.get("with_growth_measured"),
+        "grown_over_10pct": c.get("grown_over_10pct"),
+        "shrunk_over_10pct": c.get("shrunk_over_10pct"),
+        "median_growth_pct": d.get("median_growth_pct"),
+    }
+
+
 def melt_linked_record():
     """How melt-linked hazards appear in our own record, by decade.
 
@@ -190,6 +207,7 @@ def main():
                  "forward, and none of it predicts a specific event."),
         "warming": warm,
         "glacial_lakes": lakes(),
+        "inventory": inventory_summary(),
         "record": melt_linked_record(),
     }
     dst = PROCESSED / "climate_context.json"

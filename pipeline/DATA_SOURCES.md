@@ -127,3 +127,41 @@ the experimental "C" section show a "not configured" message. Dataset page:
 <https://disc.gsfc.nasa.gov/datasets/GPM_3IMERGDL_07/summary>
 (the granule revision letter V07A/B/C varies by date; `fetch_rain.py` tries
 newest first).
+
+## 9. Glacial lake inventory — `glacial_lakes.py`
+
+Open High Mountain Asia inventory, Zenodo record **17948783** (CC-BY-4.0),
+which publishes median lake extents for **2016–2017** and **2022–2024**.
+Download these eight files into `data/raw/hma_lakes/`:
+
+```
+Glacial_lakes_2016_2017_median.{shp,shx,dbf,prj}
+Glacial_lakes_2022_2024_median.{shp,shx,dbf,prj}
+```
+
+from `https://zenodo.org/api/records/17948783/files/<name>/content`
+(~300 MB total; `data/raw/` is gitignored, so this is a one-time local fetch).
+
+`glacial_lakes.py` clips both epochs to Nepal, matches lakes **spatially**
+(published ids are centroid-derived and shift as a lake grows), and writes
+`glacial_lakes.json`: 306 lakes at or above 0.05 km² and 3500 m, of which 159
+are large enough to route downstream. Growth is measured for 290 of them — 51
+grew more than 10% between the epochs, 4 shrank, median +1.7%.
+
+`surge_paths.py` picks the routable ones up automatically.
+
+## 10. Terrain — `terrain.py`
+
+SRTM elevation from the AWS "terrarium" tiles (public domain, no key, CORS
+enabled), cached under `data/raw/terrain_tiles/`. The browser reads the same
+tiles with the same encoding, so pipeline and frontend cannot drift apart —
+verified: Kathmandu ridge reads 1448 m / 95 m above low ground / 5.25° in both.
+
+## 11. Risk-model back-test — `calibrate.py`
+
+Fits the terrain gates to the record: positives are exactly-located events,
+negatives are random Nepal points with no event of that hazard within 5 km,
+features are the five terrain numbers. Logistic regression, held-out AUC.
+Needs `scikit-learn`. Output `risk_model.json` is a **cross-check** on the
+hand-set thresholds, not a replacement — absence of a record is not absence of
+hazard, so it learns where events get *recorded*.
