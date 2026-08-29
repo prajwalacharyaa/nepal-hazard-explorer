@@ -44,9 +44,11 @@ if (matchMedia("(max-width: 899px)").matches) {
   map.addControl(geolocate, "top-right");
   map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), "bottom-right");
 } else {
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
-  map.addControl(geolocate, "bottom-right");
+  // desktop bottom-right, top -> bottom: zoom, locate, info "i"
+  // (MapLibre renders the last-added control at the top of a bottom corner)
   map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+  map.addControl(geolocate, "bottom-right");
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
 }
 window.__map = map;                       // handy when debugging in the console
 

@@ -1439,10 +1439,9 @@ body.impact { height: 100%; overflow: hidden; }
   text-align: center;
   border: 1.5px solid var(--danger);
 }
-/* desktop: sit above the bottom-right map controls */
-@media (min-width: 900px) { #alert-btn { right: 16px; bottom: 132px; } }
-/* mobile: top-right, above the info "i" */
+@media (min-width: 900px) { #alert-btn { right: 16px; top: 16px; } }
 @media (max-width: 899px) { #alert-btn { right: 12px; top: 12px; } }
+/* keep the map's top-right controls clear of the alert button */
 @media (max-width: 899px) { .maplibregl-ctrl-top-right { top: 62px; } }
 
 #alert-card {
@@ -1458,7 +1457,7 @@ body.impact { height: 100%; overflow: hidden; }
   box-shadow: var(--shadow-lg);
   padding: 16px 16px 14px;
 }
-@media (min-width: 900px) { #alert-card { right: 16px; bottom: 132px; } }
+@media (min-width: 900px) { #alert-card { right: 16px; top: 16px; } }
 @media (max-width: 899px) { #alert-card { right: 12px; top: 62px; } }
 #alert-card .x {
   position: absolute; top: 8px; right: 8px;
