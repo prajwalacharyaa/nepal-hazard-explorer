@@ -28,7 +28,17 @@
           <path d="M14 6l-6 6 6 6"/>
         </svg>
       </button>
-      <h1>Nepal Water &amp; Slope Hazards</h1>
+      <div class="title-row">
+        <h1>Nepal Water &amp; Slope Hazards</h1>
+        <button id="analysis-btn" type="button" class="head-action"
+                aria-haspopup="dialog" title="Analyse risk at my location"
+                aria-label="Analyse hazard risk at my location">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/>
+          </svg>
+        </button>
+      </div>
       <p class="tagline">Landslides, floods, flash floods, GLOFs, debris flows and avalanches recorded since 1971</p>
     </div>
 
@@ -138,6 +148,17 @@
     <span id="alert-badge" hidden></span>
   </button>
   <div id="alert-card" hidden role="dialog" aria-label="Alerts"></div>
+
+  <div id="analysis-modal" hidden role="dialog" aria-modal="true" aria-label="Analysis of risk">
+    <div class="an-scrim"></div>
+    <div class="an-card" role="document">
+      <div class="an-head">
+        <h2>Analysis of Risk</h2>
+        <button class="an-x" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="an-body"></div>
+    </div>
+  </div>
 
   <div id="calendar-panel" hidden></div>
 

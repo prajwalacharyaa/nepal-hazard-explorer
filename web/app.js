@@ -1102,3 +1102,252 @@ function toggleRainLayer(btn) {
     paint: { "line-color": "#0369a1", "line-width": 1.2, "line-opacity": 0.7 } });
   btn.textContent = "Hide on map";
 }
+
+/* =========================================================================
+   ANALYSIS OF RISK — one-tap, location-based summary for the spot you are
+   standing on. A transparent heuristic over the recorded history, recent
+   IMERG rainfall and past losses. NOT a forecast.
+   ========================================================================= */
+const AN = {
+  el: document.getElementById("analysis-modal"),
+  body: null,
+  open: false,
+};
+AN.body = AN.el.querySelector(".an-body");
+
+function anClose() {
+  AN.el.hidden = true;
+  AN.open = false;
+  document.getElementById("analysis-btn").setAttribute("aria-expanded", "false");
+}
+AN.el.querySelector(".an-x").onclick = anClose;
+AN.el.querySelector(".an-scrim").onclick = anClose;
+addEventListener("keydown", (e) => { if (e.key === "Escape" && AN.open) anClose(); });
+
+function anShow() {
+  AN.el.hidden = false;
+  AN.open = true;
+  document.getElementById("analysis-btn").setAttribute("aria-expanded", "true");
+}
+
+/* fast great-circle distance in km */
+function kmBetween(a, b) {
+  const R = 6371, r = Math.PI / 180;
+  const dLat = (b[1] - a[1]) * r, dLon = (b[0] - a[0]) * r;
+  const s = Math.sin(dLat / 2) ** 2 +
+    Math.cos(a[1] * r) * Math.cos(b[1] * r) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+/* the whole computation, given a coordinate inside Nepal */
+function analysePoint(lon, lat) {
+  const here = [lon, lat];
+  const dName = districtAt(here);
+  if (!dName) return { outside: true };
+
+  const dix = (state.data.index && state.data.index[dName]) || null;
+  const rain = (RAIN && RAIN.districts && RAIN.districts[dName]) || null;
+  const nowYear = new Date().getFullYear();
+
+  // recorded events within 20 km, any year
+  const RAD = 20;
+  const near = [];
+  for (const f of (state.data.events ? state.data.events.features : [])) {
+    if (!f.geometry) continue;
+    const dist = kmBetween(here, f.geometry.coordinates);
+    if (dist <= RAD) near.push({ f, km: dist });
+  }
+  near.sort((a, b) =>
+    b.f.properties.date.localeCompare(a.f.properties.date) ||
+    (b.f.properties.severity_score || 0) - (a.f.properties.severity_score || 0));
+  const nNear = near.length;
+  const sevSum = near.reduce((s, n) => s + (n.f.properties.severity_score || 0), 0);
+  const recentNear = near.filter((n) => n.f.properties.year >= nowYear - 5).length;
+  const mostRecent = near[0] ? near[0].f : null;
+
+  // ---- composite risk score (0-100) -------------------------------------
+  const cHist = clamp01(nNear / 25) * 30 + clamp01(sevSum / 400) * 8;
+  const cRecent = clamp01(recentNear / 6) * 14;
+  const lastYr = dix ? dix.last_year : 0;
+  const cLast = lastYr >= nowYear - 1 ? 12 : lastYr >= nowYear - 3 ? 8 :
+    lastYr >= nowYear - 6 ? 4 : 0;
+  const cRain = rain ? clamp01(rain.mm_win_max / 180) * 26 : 0;
+  const cVuln = dix ? clamp01((dix.deaths_per_100k || 0) / 300) * 14 : 0;
+  let risk = Math.round(cHist + cRecent + cLast + cRain + cVuln);
+  risk = Math.max(3, Math.min(97, risk));
+  const band =
+    risk < 20 ? { key: "low", label: "Low", col: "#16a34a" } :
+    risk < 45 ? { key: "moderate", label: "Moderate", col: "#d97706" } :
+    risk < 70 ? { key: "elevated", label: "Elevated", col: "#ea580c" } :
+                { key: "high", label: "High", col: "#b91c1c" };
+
+  // ---- per-hazard history in this district ------------------------------
+  const bh = (dix && dix.by_hazard) || {};
+  const totalD = Object.values(bh).reduce((a, b) => a + b, 0) || 1;
+  const hazards = Object.entries(bh)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([h, n]) => ({ h, n, share: n / totalD }));
+
+  // ---- "what could affect this area" -----------------------------------
+  const drivers = [];
+  if (rain && rain.mm_win_max >= 60) {
+    drivers.push("Rain already falling — " + Math.round(rain.mm_win_max) +
+      " mm in the district over the last " + RAIN.window_days +
+      (RAIN.window_days === 1 ? " day." : " days."));
+  }
+  drivers.push("Monsoon rainfall (Jun–Sep) — the dominant trigger for every hazard below.");
+  if (bh.landslide) drivers.push("Rain-triggered landslides and slope failures on steep ground.");
+  if (bh.debris_flow) drivers.push("Debris flows down steep tributaries after cloudbursts.");
+  if (bh.flash_flood) drivers.push("Flash flooding in small, steep catchments with little warning.");
+  if (bh.flood) drivers.push("River flooding along the valley floor.");
+  if (bh.glof) drivers.push("Glacial lake outburst floods (GLOF) arriving from upstream.");
+  if (bh.avalanche) drivers.push("Snow and ice avalanche in the high terrain above.");
+  if (drivers.length <= 2) drivers.push("Earthquake-shaken slopes staying failure-prone for years after a quake.");
+
+  return {
+    outside: false, dName, dix, rain, risk, band, hazards, drivers,
+    nNear, recentNear, mostRecent, radiusKm: RAD, nowYear,
+    slug: slugify(dName),
+  };
+}
+
+/* staged progress bar, then the result */
+function runAnalysis(lon, lat) {
+  anShow();
+  AN.body.innerHTML =
+    '<p class="an-note">Reading your surroundings. This is a heuristic over the ' +
+    'recorded history and recent rainfall — not a forecast.</p>' +
+    '<div class="an-prog"><span id="an-bar"></span></div>' +
+    '<p class="an-step" id="an-step">Locating you…</p>';
+  const bar = document.getElementById("an-bar");
+  const step = document.getElementById("an-step");
+  const steps = [
+    ["Pinpointing the district…", 22],
+    ["Reading recent rainfall (IMERG)…", 45],
+    ["Scanning recorded events within 20 km…", 72],
+    ["Scoring exposure and past losses…", 92],
+  ];
+  let i = 0;
+  requestAnimationFrame(() => (bar.style.width = "8%"));
+  const tick = () => {
+    if (i < steps.length) {
+      step.textContent = steps[i][0];
+      bar.style.width = steps[i][1] + "%";
+      i++;
+      setTimeout(tick, 430);
+    } else {
+      bar.style.width = "100%";
+      setTimeout(() => {
+        const data = analysePoint(lon, lat);
+        renderAnalysis(data, [lon, lat]);
+      }, 300);
+    }
+  };
+  setTimeout(tick, 350);
+}
+
+function renderAnalysis(d, pt) {
+  if (d.outside) {
+    AN.body.innerHTML = '<p class="an-note">That location is outside Nepal. ' +
+      'This analysis only covers Nepal.</p>';
+    return;
+  }
+  const pct = d.risk;
+  const hazRows = d.hazards.slice(0, 5).map((x) => {
+    const w = Math.round(x.share * 100);
+    return '<div class="an-haz">' +
+      '<span class="an-haz-name" style="color:' + (HAZARD_COLORS[x.h] || "") + '">' + hazardName(x.h) + '</span>' +
+      '<span class="an-haz-bar"><i style="width:' + Math.max(4, w) + '%;background:' + (HAZARD_COLORS[x.h] || "#888") + '"></i></span>' +
+      '<span class="an-haz-n">' + fmt(x.n) + ' <em>' + w + '%</em></span>' +
+      '</div>';
+  }).join("") ||
+    '<p class="an-note">No water- or slope-hazard events on record for this district.</p>';
+
+  const rainLine = d.rain
+    ? "Last " + RAIN.window_days + (RAIN.window_days === 1 ? " day" : " days") +
+      ": <b>" + Math.round(d.rain.mm_win_max) + " mm</b> peak, " +
+      Math.round(d.rain.mm_24h_max) + " mm in 24 h (district, NASA IMERG)."
+    : "Rainfall layer not configured — recent-rain signal not included in the score.";
+
+  const mr = d.mostRecent ? d.mostRecent.properties : null;
+  const recentBlock = d.nNear
+    ? '<p class="an-sub"><b>' + fmt(d.nNear) + "</b> recorded event" +
+      (d.nNear === 1 ? "" : "s") + " within " + d.radiusKm + " km" +
+      (d.recentNear ? ", " + fmt(d.recentNear) + " in the last 5 years" : "") + ". " +
+      (mr ? 'Most recent: <b style="color:' + (HAZARD_COLORS[mr.hazard] || "") + '">' +
+        hazardName(mr.hazard) + "</b>, " + readableDate(mr.date) +
+        (mr.deaths ? " — " + fmt(mr.deaths) + " dead" : "") + "." : "") +
+      "</p>"
+    : '<p class="an-sub">No events recorded within ' + d.radiusKm +
+      " km — but absence of a record is not absence of hazard, especially before ~2011.</p>";
+
+  AN.body.innerHTML =
+    '<div class="an-score">' +
+      '<div class="an-dial" style="--c:' + d.band.col + ';--p:' + pct + '">' +
+        '<span class="an-pct">' + pct + "<i>%</i></span>" +
+      "</div>" +
+      '<div class="an-score-txt">' +
+        '<span class="an-band" style="background:' + d.band.col + '">' + d.band.label + " exposure</span>" +
+        "<p><b>" + d.dName + "</b> district" +
+        (d.dix ? " · " + fmt(d.dix.events) + " events on record, " + fmt(d.dix.deaths) +
+          " deaths since " + d.dix.first_year : "") + ".</p>" +
+        '<p class="an-note">A 0–100 blend of nearby recorded events, how recent they are, ' +
+        "current rainfall and the district's past death rate. Comparative, not a probability.</p>" +
+      "</div>" +
+    "</div>" +
+
+    '<div class="an-sec"><h3>Recent conditions</h3>' +
+      '<p class="an-sub">' + rainLine + "</p>" + recentBlock + "</div>" +
+
+    '<div class="an-sec"><h3>What the record shows here</h3>' + hazRows + "</div>" +
+
+    '<div class="an-sec"><h3>What could affect this area</h3>' +
+      '<ul class="an-list">' + d.drivers.map((x) => "<li>" + x + "</li>").join("") + "</ul></div>" +
+
+    '<div class="an-cta">' +
+      '<button class="btn" id="an-map">Show this spot on the map</button>' +
+      '<a class="btn btn-primary" id="an-full" href="district.html?d=' +
+        encodeURIComponent(d.slug) + filterQuery() + '">View full detail for ' + d.dName + " →</a>" +
+    "</div>" +
+    '<p class="an-foot">Heuristic research aid, not an operational warning. For official ' +
+    'alerts use Nepal’s DHM and NDRRMA. <a href="methodology.html">How this is built →</a></p>';
+
+  const mapBtn = document.getElementById("an-map");
+  if (mapBtn) mapBtn.onclick = () => {
+    anClose();
+    map.flyTo({ center: pt, zoom: 11, duration: 900 });
+    collapsePanel();
+    if (d.dName) openAreaCard(d.dName);
+  };
+}
+
+document.getElementById("analysis-btn").onclick = () => {
+  if (!state.data.events || !state.data.index) {
+    return toast("Still loading the dataset — try again in a moment.");
+  }
+  if (!navigator.geolocation) {
+    return toast("This browser can't share a location, so the area analysis is unavailable.");
+  }
+  anShow();
+  AN.body.innerHTML =
+    '<p class="an-note">Waiting for your location. Allow the permission prompt ' +
+    'to run the analysis.</p>' +
+    '<div class="an-prog"><span id="an-bar" style="width:6%"></span></div>' +
+    '<p class="an-step">Requesting location permission…</p>';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => runAnalysis(pos.coords.longitude, pos.coords.latitude),
+    (err) => {
+      const msg = err && err.code === 1
+        ? "Location permission is required for the area analysis. Enable it for this site and try again."
+        : err && err.code === 3
+        ? "Location timed out. Try again with a clearer view of the sky."
+        : "Couldn't get your location, so the area analysis can't run.";
+      anClose();
+      toast(msg, 6000);
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+  );
+};
