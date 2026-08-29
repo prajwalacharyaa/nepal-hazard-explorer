@@ -210,6 +210,24 @@
       high-altitude events stayed under-reported, and the absolute numbers are
       small. The record cannot answer the question; it is reported as it stands
       rather than presented as evidence either way.</p>
+    <p><b>Areas under an active alert.</b> After a serious event the places it
+      hit stay at raised risk for reasons the terrain cannot see: saturated
+      ground, a channel blocked or re-routed by debris, material still perched
+      upslope, damaged infrastructure, people in temporary shelter. That state
+      is real and it fades, so <code>pipeline/active_alerts.py</code>
+      <b>derives</b> alerts rather than keeping a hand-maintained list: any
+      recorded event above severity 25 raises one over its district and
+      municipality, which steps down <i>high</i> (7 days) →
+      <i>elevated</i> (21) → <i>watch</i> (45) and then expires. Run daily, an
+      alert appears wherever the next serious event lands and disappears from
+      wherever the last one did, with nobody editing anything.</p>
+    <p>While an alert stands it raises a floor under the score and lifts the
+      hazards the event implies — most for the same hazard type, less for
+      others, and more for a municipality-level match than a district-wide one.
+      It never lifts a hazard the terrain has already ruled out, so an alert
+      cannot put a flood score on a ridge. The browser re-checks every expiry
+      against the viewer's own clock, so a stale build shows nothing rather
+      than something wrong.</p>
     <p>Limits worth stating plainly: SRTM is 30&nbsp;m and dates from 2000, so
       it misses embankments, flood walls, river training and anything built
       since; the score is comparative, not a probability; and it is not a
@@ -265,6 +283,12 @@
         glacial lakes, dams, weirs and hydropower</li>
       <li><code>climate_context.json</code> — observed warming, freezing-level
         shift, glacial-lake trend, melt-linked share of the record</li>
+      <li><code>glacial_lakes.json</code> — every mapped glacial lake in Nepal
+        with its measured 2016→2022 area change</li>
+      <li><code>active_alerts.json</code> — areas currently under a decaying
+        post-event alert</li>
+      <li><code>risk_model.json</code> — the terrain gates back-tested against
+        the record</li>
       <li><code>meta.json</code> — build date, counts, span, latest event</li>
     </ul>
     <p>The map's download button exports whatever is currently filtered as CSV +

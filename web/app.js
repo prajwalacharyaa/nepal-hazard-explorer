@@ -130,6 +130,7 @@ async function loadAll() {
   document.getElementById("heat-label").textContent = `${state.heatBoost.toFixed(1)}×`;
   updateStats();                       // panel is useful before the map paints
   initAlerts();                        // needs state.data.events
+  anLoadAlerts();                      // so area cards can badge at once
   const go = () => setView(initialView || "heatmap");
   map.loaded() ? go() : map.once("load", go);
 }
@@ -357,6 +358,7 @@ async function ensurePalikaLayer() {
   state.palikaLoaded = true;
   let gj;
   try { gj = await loadJSON(paths.palikas); } catch (e) { return; }
+  state.data.palikas = gj;                  // also used to place alerts
   map.addSource("palikas", { type: "geojson", data: gj });
   map.addLayer({
     id: "palika-fill", type: "fill", source: "palikas", minzoom: 8,
@@ -482,8 +484,20 @@ function renderAreaCard({ title, subtitle, slug, feats, allTime, at }) {
          </svg>Analyse</button>`
     : "";
 
+  // an alert badge sits above the name so it reads before anything else
+  const al = alertFor(a2District(subtitle, title), title);
+  const alertChip = al
+    ? `<div class="ac-alert lvl-${al.level}">
+         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+           <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+           <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+         </svg>${al.label.toUpperCase()}</div>`
+    : "";
+
   const firstOpen = card.hidden;
   card.innerHTML = `<button class="x" aria-label="Close">×</button>
+    ${alertChip}
     <div class="ac-title"><h3>${title}</h3>${analyseBtn}</div>
     <p class="muted">${subtitle}</p>
     ${body}
@@ -498,6 +512,13 @@ function renderAreaCard({ title, subtitle, slug, feats, allTime, at }) {
   card.querySelector(".x").onclick = closeAreaCard;
   const ab = card.querySelector(".ac-analyse");
   if (ab && spot) ab.onclick = () => runAnalysis(spot[0], spot[1], title);
+}
+
+/* The area card knows its own title and subtitle but not always its district;
+   for a municipality the subtitle carries it ("Rasuwa district · municipality"). */
+function a2District(subtitle, title) {
+  const m = /^(.+?)\s+district/.exec(subtitle || "");
+  return m ? m[1].trim() : title;
 }
 
 /* a representative point for an area: the middle of its recorded events,
@@ -860,6 +881,21 @@ addEventListener("keydown", (e) => {
     setPanelHidden(true);
   }
 });
+/* Which municipality a point falls in, when the palika layer has been loaded.
+   Alerts are finer-grained than districts, so this sharpens them where it can
+   and falls back to the district where it cannot. */
+function palikaAt(pt) {
+  const src = state.data.palikas;
+  if (!src) return null;
+  const p = turf.point(pt);
+  for (const f of src.features) {
+    try {
+      if (turf.booleanPointInPolygon(p, f)) return f.properties.adm3_name;
+    } catch (e) { /* skip bad geometry */ }
+  }
+  return null;
+}
+
 function districtAt(pt) {
   if (!state.data.districts) return null;
   const p = turf.point(pt);
@@ -1169,6 +1205,7 @@ const AN = {
   corr: undefined,   // cached corridors_index.json
   surge: undefined,  // cached surge_paths.json (routed release paths)
   climate: undefined, // cached climate_context.json
+  alerts: undefined,  // cached active_alerts.json
 };
 AN.body = AN.el.querySelector(".an-body");
 
@@ -1201,6 +1238,43 @@ function kmBetween(a, b) {
 }
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const lerp = (a, b, t) => a + (b - a) * t;
+
+/* Active alerts, with expiry re-checked against the viewer's own clock so a
+   stale build shows nothing rather than something wrong. */
+async function anLoadPalikas() {
+  if (state.data.palikas) return state.data.palikas;
+  try { state.data.palikas = await loadJSON(paths.palikas); }
+  catch (e) { state.data.palikas = null; }
+  return state.data.palikas;
+}
+
+async function anLoadAlerts() {
+  if (AN.alerts !== undefined) return AN.alerts;
+  try {
+    const d = await loadJSON(`${window.NHM.DATA}/active_alerts.json`);
+    const today = new Date().toISOString().slice(0, 10);
+    if (d && d.alerts) {
+      d.alerts = d.alerts.filter((a) => !a.expires || a.expires >= today);
+      AN.alerts = d;
+    } else { AN.alerts = null; }
+  } catch (e) { AN.alerts = null; }
+  return AN.alerts;
+}
+
+/* The alert covering a place, if any. Municipality match outranks district. */
+function alertFor(district, palika) {
+  if (!AN.alerts || !AN.alerts.alerts) return null;
+  let best = null;
+  for (const a of AN.alerts.alerts) {
+    if (a.district !== district) continue;
+    const inPalika = palika && (a.palikas || []).indexOf(palika) !== -1;
+    const rec = Object.assign({}, a, { scope: inPalika ? "palika" : "district" });
+    if (!best || (inPalika && best.scope !== "palika")) best = rec;
+  }
+  return best;
+}
+
+const ALERT_RANK = { high: 3, elevated: 2, watch: 1 };
 
 async function anLoadClimate() {
   if (AN.climate !== undefined) return AN.climate;
@@ -1671,10 +1745,34 @@ function analysePoint(lon, lat, T) {
   const risk = Math.max(2, Math.min(98,
     Math.round(combined * 74 + combined * rainF * 22 + rainF * 4)));
 
+  // An area still recovering from a serious hit is at raised risk for reasons
+  // terrain cannot see: saturated ground, a blocked or re-routed channel,
+  // debris perched upslope, damaged infrastructure. The alert decays and
+  // expires on its own, so this lifts and then lets go by itself.
+  const palikaHere = palikaAt(here);
+  const alert = alertFor(dName, palikaHere);
+  if (alert) {
+    const eff = (AN.alerts.effects || {})[alert.level] || { floor: 0, boost: 0 };
+    const scope = alert.scope === "palika" ? 1 : 0.7;   // district-wide is broader
+    for (const h of hazards) {
+      if (h.gate < 0.08) continue;                      // still cannot reach you
+      const same = alert.hazard && h.hz === alert.hazard;
+      const b = eff.boost * scope * (same ? 1 : 0.55);
+      const before = h.score;
+      h.score = clamp01(h.score + b * (1 - h.score));
+      h.alertBoost = h.score - before;
+    }
+    hazards.sort((a, b) => b.score - a.score);
+  }
+
   // ground that is intrinsically hazardous cannot read as "mostly fine",
   // however quiet the reporting record happens to be
   const terrainLed = hazards.some((h) => h.terrainLed && h.score >= 0.45);
-  const floor = terrainLed ? 40 : 0;
+  const alertFloor = alert
+    ? Math.round((((AN.alerts.effects || {})[alert.level] || {}).floor || 0) *
+                 (alert.scope === "palika" ? 1 : 0.85))
+    : 0;
+  const floor = Math.max(terrainLed ? 40 : 0, alertFloor);
   const shown = Math.max(risk, floor);
 
   const band =
@@ -1726,9 +1824,9 @@ function analysePoint(lon, lat, T) {
   ];
 
   return {
-    outside: false, here, dName, slug: slugify(dName), T,
-    cryo, meltUplift, climate: AN.climate,
-    risk, band, verdict, factors,
+    outside: false, here, dName, palika: palikaHere, slug: slugify(dName), T,
+    alert, cryo, meltUplift, climate: AN.climate,
+    risk: shown, band, verdict, factors,
     hazards, live, rainMM, lakes,
     nearList: near.slice(0, 40),
     recentList: near.filter((n) => {
@@ -1771,7 +1869,7 @@ async function runAnalysis(lon, lat, placeLabel) {
 
   set("Reading rain over the last few days…", 58);
   await Promise.all([anLoadGlof(), anLoadCorridors(), anLoadSurge(),
-                     anLoadClimate()]);
+                     anLoadClimate(), anLoadAlerts(), anLoadPalikas()]);
   await new Promise((r) => setTimeout(r, 240));
 
   set("Matching hazards to your slope and height…", 82);
@@ -1957,7 +2055,10 @@ function renderAnalysis(d) {
       : "nothing recorded nearby";
     // the mechanism is worth the space on anything actually plausible
     const mech = h.score >= 0.12
-      ? '<span class="an-hz-mech">' + anMechanism(h, d) + '</span>' : "";
+      ? '<span class="an-hz-mech">' + anMechanism(h, d) +
+        (h.alertBoost > 0.02
+          ? ' <b>Raised while this area is under alert.</b>' : "") +
+        '</span>' : "";
     return '<div class="an-hz">' +
       '<span class="an-hz-bar"><i style="height:' + Math.max(5, pct) + '%;background:' + col + '"></i></span>' +
       '<span class="an-hz-txt">' +
@@ -2008,7 +2109,34 @@ function renderAnalysis(d) {
     : `Elevation data could not be loaded, so hazards could not be gated on terrain — ` +
       `the score below leans on nearby records alone and will overstate risk on high, flat ground.`;
 
-  AN.body.innerHTML =
+  const alertBanner = d.alert ? (function () {
+    const a = d.alert;
+    const until = a.expires;
+    const where = a.scope === "palika" && d.palika
+      ? `${d.palika}, ${a.district} district` : `${a.district} district`;
+    const what = a.hazard
+      ? `${hazardName(a.hazard).toLowerCase()} on ${readableDate(a.event_date)}`
+      : `an event on ${readableDate(a.event_date)}`;
+    const toll = a.deaths || a.missing
+      ? ` (${[a.deaths ? fmt(a.deaths) + " dead" : "",
+              a.missing ? fmt(a.missing) + " missing" : ""]
+             .filter(Boolean).join(", ")})` : "";
+    return '<div class="an-alert lvl-' + a.level + '">' +
+      '<span class="an-alert-ico" aria-hidden="true">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+        'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>' +
+        '<line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' +
+      '</span>' +
+      '<span class="an-alert-txt"><b>' + a.label.toUpperCase() + '</b>' +
+        '<span>' + where + ' — after ' + what + toll + ', ' + a.days_since +
+        ' day' + (a.days_since === 1 ? "" : "s") + ' ago. Ground stays unstable ' +
+        'and channels stay blocked while an area recovers. Steps down and clears ' +
+        'by ' + until + ' unless something new happens.</span></span>' +
+    '</div>';
+  }()) : "";
+
+  AN.body.innerHTML = alertBanner +
     '<div class="an-verdict an-b-' + d.band.k + '">' +
       '<div class="an-dial" style="--c:' + d.band.col + ';--p:' + d.risk + '">' +
         '<span class="an-pct">' + d.risk + '<i>%</i></span></div>' +

@@ -1668,6 +1668,66 @@ body.impact { height: 100%; overflow: hidden; }
   border-color: color-mix(in srgb, var(--accent) 55%, var(--surface));
 }
 
+/* active-alert banner in the analysis modal */
+.an-alert {
+  display: grid; grid-template-columns: auto 1fr; gap: 11px; align-items: start;
+  padding: 12px 13px; border-radius: 11px;
+  border: 1px solid; border-left-width: 3px;
+}
+.an-alert-ico { display: grid; place-items: center; padding-top: 1px; }
+.an-alert-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.an-alert-txt b {
+  font-size: 11.5px; font-weight: 750; letter-spacing: 0.06em;
+}
+.an-alert-txt span { font-size: 11.5px; line-height: 1.55; color: var(--ink-dim); }
+.an-alert.lvl-high {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--surface));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  color: #b91c1c;
+}
+.an-alert.lvl-high b { color: #b91c1c; }
+.an-alert.lvl-elevated {
+  border-color: color-mix(in srgb, #ea580c 45%, var(--surface));
+  background: color-mix(in srgb, #ea580c 8%, var(--surface));
+  color: #c2410c;
+}
+.an-alert.lvl-elevated b { color: #c2410c; }
+.an-alert.lvl-watch {
+  border-color: color-mix(in srgb, #d97706 40%, var(--surface));
+  background: color-mix(in srgb, #d97706 7%, var(--surface));
+  color: #b45309;
+}
+.an-alert.lvl-watch b { color: #b45309; }
+@keyframes anAlertPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.28); }
+  50%      { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+}
+.an-alert.lvl-high { animation: anAlertPulse 2.4s ease-in-out infinite; }
+
+/* alert badge on the area card, above the place name */
+.ac-alert {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin: 0 0 7px; padding: 3px 9px;
+  border-radius: 999px; border: 1px solid;
+  font-size: 10px; font-weight: 750; letter-spacing: 0.05em;
+}
+.ac-alert.lvl-high {
+  color: #b91c1c; border-color: color-mix(in srgb, var(--danger) 45%, var(--surface));
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  animation: anAlertPulse 2.4s ease-in-out infinite;
+}
+.ac-alert.lvl-elevated {
+  color: #c2410c; border-color: color-mix(in srgb, #ea580c 45%, var(--surface));
+  background: color-mix(in srgb, #ea580c 10%, var(--surface));
+}
+.ac-alert.lvl-watch {
+  color: #b45309; border-color: color-mix(in srgb, #d97706 40%, var(--surface));
+  background: color-mix(in srgb, #d97706 9%, var(--surface));
+}
+@media (prefers-reduced-motion: reduce) {
+  .an-alert.lvl-high, .ac-alert.lvl-high { animation: none; }
+}
+
 /* climate context strip */
 .an-climate { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
 .an-cl-stat {
