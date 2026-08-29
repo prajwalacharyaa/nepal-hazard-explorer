@@ -3,50 +3,60 @@
 (function () {
   const DATA = "../data/processed";
 
-  /* Hazard palette — tuned for a LIGHT background: each colour clears 4.5:1
-     against white so it works as body text as well as a map fill. */
+  /* Hazard colours. Categorical, so they only have to be told apart from each
+     other — but each also clears 4.5:1 on the bone background because they are
+     used as label text as often as map fill. Ordered by how often they appear.
+
+     Keys must match config.py's HAZARD_MAP output. */
   const HAZARD_COLORS = {
-    landslide: "#c0392b", flood: "#2c6ca0", flash_flood: "#0f766e",
-    glof: "#8a4f7d", debris_flow: "#b45309", avalanche: "#64748b", other: "#52525b",
+    landslide: "#a8453a",     // rust
+    flood: "#2f6d94",         // steel blue
+    flash_flood: "#157f85",   // cyan-teal, deliberately far from flood
+    glof: "#7a55a3",          // violet reads as ice
+    debris_flow: "#a06a25",   // ochre
+    avalanche: "#6a7d94",     // cold grey-blue
+    other: "#7b7466",
   };
   const HAZARD_LABELS = {
     landslide: "Landslide", flood: "Flood", flash_flood: "Flash flood",
     glof: "GLOF", debris_flow: "Debris flow", avalanche: "Avalanche", other: "Other",
   };
+  /* Severity is ordinal, so this one IS a ramp: neutral -> blue -> warm -> red. */
   const SEV_COLORS = {
-    minor: "#94a3b8", small: "#2c6ca0", moderate: "#d97706",
-    major: "#ea580c", catastrophic: "#b91c1c",
+    minor: "#a79f90", small: "#2f6d94", moderate: "#bd8526",
+    major: "#c05f2b", catastrophic: "#9b2a24",
   };
 
-  /* Chart / map colours, so no module hardcodes a theme value. */
+  /* Anything a chart or map layer needs, so no module hardcodes a theme value.
+     Mirrors the CSS custom properties in style.css — keep the two in step. */
   const THEME = {
-    ink: "#0f172a",
-    inkDim: "#475569",
-    inkFaint: "#64748b",
-    hair: "#e2e8f0",
-    surface: "#ffffff",
-    surface2: "#f1f5f9",
-    accent: "#c2410c",
-    bar: "#2c6ca0",
-    barMuted: "#a8c3da",
-    // sequential ramp for choropleth / calendar on a light ground (YlOrRd)
-    ramp: ["#fff7ec", "#fee8c8", "#fdd49e", "#fdbb84", "#fc8d59", "#e34a33", "#b30000"],
-    // Heat layer on a light basemap. Front-loaded: a single isolated event has
-    // very low density, so the ramp must already be clearly visible by ~0.04 —
-    // otherwise sparse areas disappear. The upper half then climbs slowly so
-    // dense clusters still differentiate instead of flooding to solid red.
+    ink: "#23201b",
+    inkDim: "#544e42",
+    inkFaint: "#7b7466",
+    hair: "#ded8ca",
+    surface: "#fdfcf9",
+    surface2: "#eae5da",
+    accent: "#1d6a66",
+    bar: "#2f6d94",
+    barMuted: "#a9c3d6",
+    // sequential ramp for the choropleth and the calendar
+    ramp: ["#f8f1e2", "#f2ddb9", "#ebc188", "#e0a15f", "#d07a44", "#b45134", "#8c2b25"],
+    // Heat layer. Front-loaded on purpose: one isolated event produces very low
+    // density, so the ramp has to be clearly visible by ~0.04 or sparse areas
+    // vanish. Above that it climbs slowly so dense clusters still separate
+    // instead of flooding to one solid red.
     heat: [
-      0.00, "rgba(255,241,222,0)",
-      0.04, "rgba(253,206,145,0.55)",
-      0.14, "rgba(252,180,116,0.68)",
-      0.32, "rgba(249,146,90,0.76)",
-      0.54, "rgba(238,105,62,0.83)",
-      0.78, "rgba(209,55,35,0.89)",
-      1.00, "rgba(155,10,10,0.94)",
+      0.00, "rgba(248,241,226,0)",
+      0.04, "rgba(243,213,152,0.55)",
+      0.14, "rgba(236,183,118,0.68)",
+      0.32, "rgba(224,145,90,0.76)",
+      0.54, "rgba(205,101,64,0.83)",
+      0.78, "rgba(170,55,42,0.89)",
+      1.00, "rgba(124,24,26,0.94)",
     ],
-    // deck.gl hexbin (RGB triples)
-    hex: [[254, 232, 200], [253, 212, 158], [253, 187, 132],
-          [252, 141, 89], [227, 74, 51], [179, 0, 0]],
+    // deck.gl wants RGB triples, not CSS strings
+    hex: [[248, 241, 226], [242, 221, 185], [235, 193, 136],
+          [224, 161, 95], [208, 122, 68], [180, 81, 52], [140, 43, 37]],
   };
 
   const paths = {
@@ -263,19 +273,19 @@
         if (map.getSource("nepal-mask")) return;
         map.addSource("nepal-mask", { type: "geojson", data: mask });
         map.addLayer({ id: "nepal-mask", type: "fill", source: "nepal-mask",
-          paint: { "fill-color": "#f5f7fa", "fill-opacity": 0.55 } });
+          paint: { "fill-color": "#f2efe8", "fill-opacity": 0.55 } });
         return fetch(`${DATA}/nepal_outline.geojson`).then((r) => r.json());
       })
       .then((outline) => {
         if (!outline || map.getSource("nepal-outline")) return;
         map.addSource("nepal-outline", { type: "geojson", data: outline });
         map.addLayer({ id: "nepal-outline", type: "line", source: "nepal-outline",
-          paint: { "line-color": "#94a3b8", "line-width": 1.1, "line-opacity": 0.9 } });
+          paint: { "line-color": "#a79f90", "line-width": 1.1, "line-opacity": 0.9 } });
       })
       .catch(() => { /* mask is cosmetic; never block the map on it */ });
   }
 
-  /* Toast: brief, non-blocking confirmation (replaces alert()). */
+  /* Non-blocking confirmation. Use instead of alert(). */
   function toast(msg, ms = 3200) {
     let t = document.getElementById("nhm-toast");
     if (!t) {
@@ -290,8 +300,7 @@
     t._timer = setTimeout(() => t.classList.remove("show"), ms);
   }
 
-  /* Back-to-top: a small pill that appears once you have scrolled a document
-     page. Auto-wired on any <body class="doc"> page; no per-page code. */
+  /* Back-to-top pill. Auto-wired on any <body class="doc">, no per-page code. */
   function initBackToTop() {
     var b = document.body;
     if (!b || !b.classList.contains("doc")) return;

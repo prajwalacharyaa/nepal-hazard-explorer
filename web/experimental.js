@@ -149,7 +149,7 @@ function renderNowcast(d) {
   const dEl = document.getElementById("nc-district");
   if (rec) {
     const wet = rec.mm_win_max >= 150;
-    const col = wet ? "#0369a1" : "#475569";
+    const col = wet ? "#1f5f78" : "#544e42";
     dEl.innerHTML =
       `<b>${d}</b>: <span style="color:${col}">${Math.round(rec.mm_win_max)} mm</span> ` +
       `peak over the last ${RAIN.window_days} day(s) ` +
@@ -166,7 +166,7 @@ function renderNowcast(d) {
     if (!r) continue;
     const s2 = document.createElement("span");
     s2.className = "chip on";
-    s2.style.color = r.mm_win_max >= 150 ? "#0369a1" : "#475569";
+    s2.style.color = r.mm_win_max >= 150 ? "#1f5f78" : "#544e42";
     s2.textContent = `${name} · ${Math.round(r.mm_win_max)} mm`;
     s2.onclick = () => { document.getElementById("d-pick").value = name; render(); };
     list.appendChild(s2);
@@ -175,7 +175,7 @@ function renderNowcast(d) {
     list.innerHTML = "<span class='muted'>No rainfall data in the latest window.</span>";
 }
 
-const LS_COLORS = ["#94a3b8", "#2c6ca0", "#0f766e", "#d97706", "#ea580c", "#b91c1c"];
+const LS_COLORS = ["#a79f90", "#2f6d94", "#157f85", "#bd8526", "#c05f2b", "#9b2a24"];
 
 function renderSusceptibility(d) {
   const method = document.getElementById("susc-method");
@@ -244,7 +244,7 @@ function drawTrend(rec) {
   const box = document.getElementById("trend-box");
   const s = rec.trend_per_year;
   const arrow = s > 0.15 ? "↑" : s < -0.15 ? "↓" : "→";
-  const col = s > 0.15 ? "#b45309" : s < -0.15 ? THEME.bar : THEME.inkFaint;
+  const col = s > 0.15 ? "#94620f" : s < -0.15 ? THEME.bar : THEME.inkFaint;
   box.innerHTML =
     `<p style="font-size:26px;margin:4px 0;color:${col}">${arrow} ${s > 0 ? "+" : ""}${s.toFixed(2)}<span style="font-size:12px"> events / year</span></p>` +
     `<p class="cap">OLS slope of annual recorded totals, 2011–2025. Reporting coverage also grew over this period, so part of any rise is observational.</p>`;
@@ -263,7 +263,7 @@ function drawHist(rec) {
   svg.append("g").selectAll("rect").data(share).join("rect")
     .attr("x", (_, i) => x(i)).attr("width", x.bandwidth())
     .attr("y", (v) => y(v || 0)).attr("height", (v) => H - padB - y(v || 0))
-    .attr("fill", "#0f766e")
+    .attr("fill", "#157f85")
     .append("title").text((v, i) => `${MONTHS[i]}: ${Math.round((v || 0) * 100)}% of 1971–2010 events`);
   svg.append("g").attr("transform", `translate(0,${H - padB})`).attr("color", THEME.inkFaint)
     .call(d3.axisBottom(x).tickFormat((i) => MONTHS[i][0]).tickSizeOuter(0));
