@@ -321,14 +321,8 @@ h1, h2, h3 {
 }
 .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--on-accent); }
 
-.btn:focus-visible, .seg button:focus-visible, .pill:focus-visible,
-.tabs button:focus-visible, select:focus-visible, input:focus-visible,
-summary:focus-visible, a:focus-visible, button:focus-visible,
-.switch:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
+/* no focus rings anywhere (per request) */
+*:focus, *:focus-visible, *:focus-within { outline: none !important; }
 
 /* --- inputs ------------------------------------------------------------- */
 select, input[type="text"], input[type="search"] {
@@ -352,7 +346,7 @@ select {
   background-position: right 11px center;
 }
 input::placeholder { color: var(--ink-ghost); }
-select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); outline: none; }
+select:focus, input:focus { border-color: var(--hair-strong); box-shadow: none; outline: none; }
 
 /* combobox (place search) */
 .combo { position: relative; }
@@ -437,16 +431,24 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 }
 
 /* --- hazard pills ------------------------------------------------------- */
-.pills, .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pills, .chips {
+  display: flex;
+  flex-flow: row wrap;
+  align-content: flex-start;
+  gap: 6px;
+  width: 100%;
+}
 .pill, .chip {
   appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
-  padding: 7px 12px;
+  padding: 6px 10px;
+  white-space: nowrap;
+  flex: 0 0 auto;
   border-radius: var(--r-pill);
   border: 1px solid var(--hair-strong);
   background: var(--surface);
@@ -457,7 +459,7 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 }
 .pill:hover, .chip:hover { border-color: var(--ink-ghost); }
 .pill .dot {
-  width: 8px; height: 8px;
+  width: 7px; height: 7px;
   border-radius: 999px;
   background: currentColor;
   flex: none;
@@ -1280,3 +1282,25 @@ body.impact { height: 100%; overflow: hidden; }
   border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--surface));
 }
 #area-card .cta.ghost:hover { background: var(--accent-soft); }
+
+/* mobile: info ("i") + locate controls stacked top-right */
+@media (max-width: 899px) {
+  .maplibregl-ctrl-top-right { top: 10px; right: 10px; }
+  .maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 0 0 8px auto; }
+  .maplibregl-ctrl-bottom-right { bottom: 10px; right: 10px; }
+  /* keep the attribution as a round "i" until tapped, never the full bar */
+  .maplibregl-ctrl-attrib.maplibregl-compact {
+    min-height: 30px; min-width: 30px;
+    border-radius: 999px !important;
+    box-shadow: var(--shadow-md);
+  }
+  .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) {
+    padding: 0 !important; background: var(--surface);
+  }
+  .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show)
+    .maplibregl-ctrl-attrib-inner { display: none; }
+  .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) {
+    width: 30px; overflow: hidden;
+  }
+  .maplibregl-ctrl-attrib-button { border-radius: 999px; }
+}

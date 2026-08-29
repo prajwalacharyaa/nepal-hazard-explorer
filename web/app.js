@@ -26,9 +26,8 @@ const map = new maplibregl.Map({
   container: "map",
   style: MAP_STYLE,
   center: [84.1, 28.3], zoom: 6.2,
-  attributionControl: { compact: true },
+  attributionControl: false,
 });
-map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
 const geolocate = new maplibregl.GeolocateControl({
   positionOptions: { enableHighAccuracy: true, timeout: 10000 },
   fitBoundsOptions: { maxZoom: 14 },
@@ -36,8 +35,30 @@ const geolocate = new maplibregl.GeolocateControl({
   showUserLocation: true,
   showAccuracyCircle: true,
 });
-map.addControl(geolocate, "bottom-right");
+
+// Desktop keeps everything bottom-right. On phones the bottom-right corner is
+// where the thumb and the bottom sheet live, so put the info ("i") and the
+// locate button top-right instead — info first so it sits above locate.
+if (matchMedia("(max-width: 899px)").matches) {
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), "top-right");
+  map.addControl(geolocate, "top-right");
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), "bottom-right");
+} else {
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+  map.addControl(geolocate, "bottom-right");
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+}
 window.__map = map;                       // handy when debugging in the console
+
+// MapLibre 4.7 renders the compact attribution expanded ("maplibregl-compact-show")
+// on load. Collapse it to just the "i"; it stays collapsed until the user taps it.
+function collapseAttribution() {
+  document.querySelectorAll(".maplibregl-ctrl-attrib.maplibregl-compact-show")
+    .forEach((el) => el.classList.remove("maplibregl-compact-show"));
+}
+map.on("load", collapseAttribution);
+map.on("idle", collapseAttribution);
+[300, 1200].forEach((t) => setTimeout(collapseAttribution, t));
 
 /* A blank basemap should say why — but individual tile requests fail or abort
    routinely while panning, so never warn on those. Only speak up if the map
