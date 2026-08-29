@@ -10,6 +10,70 @@ const DSLUG = qs.get("d") || "";
 
 let map, EVENT = null, CORRIDOR = null, anim = null;
 
+/* ---- mobile bottom sheet (peek / open), mirrors the home-page panel ---- */
+const isMobile = () => matchMedia("(max-width: 899px)").matches;
+const sheetEl = document.getElementById("ipanel");
+const sheetHandle = document.getElementById("ipanel-handle");
+const SHEET_PEEK = 128;                       // keep in sync with style.css
+function setSheet(name) { sheetEl.dataset.state = name; }
+function collapseSheet() { if (isMobile()) setSheet("peek"); }
+
+(function sheetDrag() {
+  const bodyEl = () => sheetEl.querySelector(".ipanel-body");
+  const peekPx = () => Math.max(0, sheetEl.offsetHeight - SHEET_PEEK);
+  const curT = () => (sheetEl.dataset.state === "open" ? 0 : peekPx());
+  let startY = 0, base = 0, dragging = false, lastY = 0, lastT = 0, vy = 0;
+
+  function down(e) {
+    if (!isMobile()) return;
+    const b = bodyEl();
+    if (e.target.closest(".ipanel-body") && b && b.scrollTop > 0) return;
+    dragging = true;
+    startY = lastY = e.clientY; lastT = performance.now(); vy = 0;
+    base = curT();
+    sheetEl.dataset.dragging = "1";
+    delete sheetEl.dataset.dragMoved;
+    sheetEl.style.setProperty("--drag-y", base + "px");
+    sheetEl.setPointerCapture?.(e.pointerId);
+  }
+  function move(e) {
+    if (!dragging) return;
+    const dy = e.clientY - startY;
+    if (Math.abs(dy) > 4) sheetEl.dataset.dragMoved = "1";
+    let y = Math.max(-24, Math.min(peekPx() + 24, base + dy));
+    sheetEl.style.setProperty("--drag-y", y + "px");
+    const now = performance.now();
+    vy = (e.clientY - lastY) / Math.max(1, now - lastT);
+    lastY = e.clientY; lastT = now;
+    e.preventDefault();
+  }
+  function up() {
+    if (!dragging) return;
+    dragging = false;
+    delete sheetEl.dataset.dragging;
+    const y = parseFloat(getComputedStyle(sheetEl).getPropertyValue("--drag-y")) || 0;
+    let open;
+    if (vy < -0.45) open = true;
+    else if (vy > 0.45) open = false;
+    else open = y < peekPx() / 2;
+    sheetEl.style.removeProperty("--drag-y");
+    setSheet(open ? "open" : "peek");
+    setTimeout(() => { delete sheetEl.dataset.dragMoved; }, 400);
+  }
+  sheetHandle.addEventListener("pointerdown", down);
+  sheetEl.querySelector(".ipanel-head").addEventListener("pointerdown", down);
+  addEventListener("pointermove", move, { passive: false });
+  addEventListener("pointerup", up);
+  addEventListener("pointercancel", up);
+  sheetHandle.addEventListener("click", () => {
+    if (sheetEl.dataset.dragMoved) return;
+    setSheet(sheetEl.dataset.state === "open" ? "peek" : "open");
+  });
+})();
+
+if (isMobile()) setSheet("peek");
+addEventListener("orientationchange", () => { if (!isMobile()) setSheet("open"); });
+
 init();
 
 async function init() {
@@ -37,6 +101,7 @@ async function init() {
 
   renderPanel();
   buildMap();
+  collapseSheet();
 }
 
 /* ------------------------------------------------------------- panel ----- */
@@ -158,6 +223,7 @@ function buildMap() {
   window.__map = map;
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
   map.addControl(new maplibregl.ScaleControl({ maxWidth: 120 }), "bottom-left");
+  map.on("dragstart", collapseSheet);
 
   // 'load' is the only safe moment to add layers: styledata also fires *during*
   // style loading, when isStyleLoaded() can briefly report true, and anything
@@ -264,6 +330,7 @@ function buildMap() {
                  "text-halo-color": "#ffffff", "text-halo-width": 1.4 } });
 
       fitCorridor(false);   // snap on open; the button animates
+      autoPlayFlow();
     }
 
     // the event itself, on top
@@ -299,7 +366,7 @@ function fitCorridor(animate = true) {
     [180, 90, -180, -90]);
   const pad = matchMedia("(min-width: 900px)").matches
     ? { top: 60, bottom: 60, left: 60, right: 420 }
-    : { top: 40, bottom: 40, left: 30, right: 30 };
+    : { top: 56, bottom: SHEET_PEEK + 28, left: 26, right: 26 };
   map.fitBounds([[b[0], b[1]], [b[2], b[3]]],
     { padding: pad, duration: animate ? 700 : 0, maxZoom: 12 });
 }
@@ -363,11 +430,9 @@ function resetFlow() {
   }
 }
 
-document.getElementById("i-play").onclick = () => {
-  if (anim) return stopFlow();
-  if (!CORRIDOR || !map.getSource("trail")) {
-    return toast("The corridor is still loading — try again in a moment.");
-  }
+function startFlow() {
+  if (anim) return;
+  if (!CORRIDOR || !map.getSource("trail")) return false;
   const path = flowPath();
   if (path.length < 2) return;
 
@@ -403,6 +468,28 @@ document.getElementById("i-play").onclick = () => {
   // a fresh run always starts from the source
   map.getSource("trail").setData(emptyLine());
   anim = requestAnimationFrame(step);
+  return true;
+}
+
+document.getElementById("i-play").onclick = () => {
+  if (anim) return stopFlow();
+  if (startFlow() === false) {
+    toast("The corridor is still loading — try again in a moment.");
+  }
 };
 
 document.getElementById("i-fit").onclick = fitCorridor;
+
+/* start the flow automatically once the corridor is on the map */
+function autoPlayFlow() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let tries = 0;
+  const t = setInterval(() => {
+    if (++tries > 20) return clearInterval(t);
+    if (anim) return clearInterval(t);
+    if (map && map.getSource && map.getSource("trail") && CORRIDOR) {
+      clearInterval(t);
+      startFlow();
+    }
+  }, 400);
+}

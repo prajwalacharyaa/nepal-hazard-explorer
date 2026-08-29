@@ -259,6 +259,30 @@
     t._timer = setTimeout(() => t.classList.remove("show"), ms);
   }
 
+  /* Back-to-top: a small pill that appears once you have scrolled a document
+     page. Auto-wired on any <body class="doc"> page; no per-page code. */
+  function initBackToTop() {
+    var b = document.body;
+    if (!b || !b.classList.contains("doc")) return;
+    var btn = document.createElement("button");
+    btn.id = "to-top";
+    btn.type = "button";
+    btn.setAttribute("aria-label", "Back to top");
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" ' +
+      'stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
+    var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    btn.addEventListener("click", function () {
+      window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+    });
+    b.appendChild(btn);
+    var show = function () { btn.classList.toggle("show", window.scrollY > 460); };
+    addEventListener("scroll", show, { passive: true });
+    show();
+  }
+  if (document.readyState !== "loading") initBackToTop();
+  else addEventListener("DOMContentLoaded", initBackToTop);
+
   window.NHM = {
     DATA, HAZARD_COLORS, HAZARD_LABELS, SEV_COLORS, THEME, MAP_STYLE,
     simplifyBasemap, paths,
