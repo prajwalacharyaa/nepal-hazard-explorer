@@ -104,19 +104,26 @@ source later catches up, `aggregate.py`'s spatial dedup merges the two and keeps
 the richer record. Currently holds the 2026-08-26 Langtang / Rasuwa cascade
 (ice-rock avalanche → river-dam breach → debris flow → flash flood).
 
-## 8. Daily landslide nowcast — Approach C  (`fetch_nowcast.py`)
+## 8. Recent rainfall — Approach C  (`fetch_rain.py`)
 
-NASA LHASA Global Landslide Nowcast v1.1 (GES DISC) — rainfall-driven, ~1 km,
-daily, categorical (moderate / high).
+NASA GPM **IMERG Late daily** precipitation, collection `GPM_3IMERGDL.07`
+(GES DISC) — ~0.1°, global, mm/day, about 12–18 h latency. The script pulls the
+last few available days, sums them, and writes per-district 24 h / window
+totals. This replaces the NASA **LHASA** landslide nowcast, whose GES DISC
+archive was retired (ends February 2021) — there is no free live successor.
 
 1. Create an Earthdata login: <https://urs.earthdata.nasa.gov/>
 2. Generate a token: profile → **Generate Token**.
-3. Local run: `EARTHDATA_TOKEN=<token> python pipeline/fetch_nowcast.py`
-4. CI: add the token as repo secret **`EARTHDATA_TOKEN`**. The
-   `.github/workflows/nowcast.yml` Action then runs daily (06:30 UTC), writes
-   `data/processed/nowcast.json`, and commits it.
+3. **Accept the EULA**: same profile page → *Applications* → approve
+   **"NASA GESDISC DATA ARCHIVE"**. Without this the download 403s.
+4. Local run: `EARTHDATA_TOKEN=<token> python pipeline/fetch_rain.py`
+   (needs `xarray` + `h5netcdf` to read the `.nc4` files).
+5. CI: add the token as repo secret **`EARTHDATA_TOKEN`**. The
+   `.github/workflows/rain.yml` Action then runs daily (07:40 UTC), writes
+   `data/processed/rain.json`, and commits it.
 
-Without a token the script exits cleanly and the "C" section shows a
-"not available" message. Dataset page:
-<https://disc.gsfc.nasa.gov/datasets/Global_Landslide_Nowcast_1.1/summary>
-(if the archive path changes, update `BASE`/`FNAME` in `fetch_nowcast.py`).
+Without a token (or EULA) the script exits cleanly and both the Alerts panel and
+the experimental "C" section show a "not configured" message. Dataset page:
+<https://disc.gsfc.nasa.gov/datasets/GPM_3IMERGDL_07/summary>
+(the granule revision letter V07A/B/C varies by date; `fetch_rain.py` tries
+newest first).

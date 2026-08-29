@@ -30,7 +30,7 @@
     <nav class="sub-tabs">
       <a href="#outlook" class="active">D · Seasonal outlook</a>
       <a href="#susceptibility" class="">A · Susceptibility</a>
-      <a href="#nowcast" class="">C · Daily nowcast</a>
+      <a href="#nowcast" class="">C · Recent rainfall</a>
       <a href="#glof" class="">B · GLOF scenarios</a>
     </nav>
 
@@ -90,17 +90,19 @@
         versa. Use as regional context, not a site assessment.</p>
     </section>
     <section id="nowcast">
-      <h2>C · Daily landslide nowcast</h2>
+      <h2>C · Recent rainfall (IMERG)</h2>
       <p class="cap" id="nc-method"></p>
       <p class="muted" id="nc-missing" hidden>
-        No nowcast yet. It is produced daily by the <code>nowcast.yml</code>
-        GitHub Action once an <code>EARTHDATA_TOKEN</code> secret is set
-        (DATA_SOURCES.md §8), or run <code>pipeline/fetch_nowcast.py</code> locally.
+        No rainfall data yet. It is produced daily by the <code>rain.yml</code>
+        GitHub Action once an <code>EARTHDATA_TOKEN</code> secret is set and the
+        GES DISC EULA is accepted (DATA_SOURCES.md §8), or run
+        <code>pipeline/fetch_rain.py</code> locally. The retired NASA LHASA
+        landslide nowcast used to sit here; its archive ends February 2021.
       </p>
       <div id="nc-body" hidden>
         <p id="nc-asof" class="muted"></p>
         <p id="nc-district" class="verdict"></p>
-        <h3>Districts flagged today</h3>
+        <h3>Wettest districts</h3>
         <div id="nc-list" class="chips"></div>
       </div>
     </section>

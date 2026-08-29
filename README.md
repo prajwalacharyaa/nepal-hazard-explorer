@@ -14,7 +14,7 @@ catastrophic events.
 Plus **find-your-area** tools (geolocation / district picker / map click), per-district
 pages (`district.html?d=<slug>`), per-event permalinks (`event.html?id=<id>`), and an
 **Experimental / research** section (`experimental.html`) — currently the seasonal
-statistical outlook (Approach D); susceptibility (A), daily nowcast (C) and GLOF
+statistical outlook (Approach D); susceptibility (A), recent rainfall (C) and GLOF
 what-if scenarios (B) are planned. The experimental layers are descriptive/modelled
 context, **not** an operational warning system.
 
@@ -71,7 +71,7 @@ python corridors.py          # -> corridors/<event id>.json + corridors_index.js
 # experimental layers:
 python glof.py               # -> glof.json            (curated dangerous_lakes.csv, §7)
 python susceptibility.py     # -> susceptibility.json  (needs hazard rasters, §6)
-python fetch_nowcast.py      # -> nowcast.json         (needs EARTHDATA_TOKEN, §8)
+python fetch_rain.py         # -> rain.json           (needs EARTHDATA_TOKEN + EULA, §8)
 
 # current output: ~13,000 events, 1971-2026, from BIPAD + DesInventar.
 # NASA GLC and HDX boundaries/population are optional add-ons (see DATA_SOURCES.md).

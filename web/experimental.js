@@ -3,7 +3,7 @@ const { DATA, THEME, loadJSON, fmt, slugify, hazardName, readableDate } = window
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-let OUT = null, SUSC = null, NOW = null, GLOF = null;
+let OUT = null, SUSC = null, RAIN = null, GLOF = null;
 
 init();
 
@@ -16,9 +16,9 @@ async function init() {
   }
   try { SUSC = await loadJSON(`${DATA}/susceptibility.json`); } catch (e) { SUSC = null; }
   try {
-    const n = await loadJSON(`${DATA}/nowcast.json`);
-    NOW = n && !n.unavailable ? n : null;
-  } catch (e) { NOW = null; }
+    const n = await loadJSON(`${DATA}/rain.json`);
+    RAIN = n && !n.unavailable && n.as_of ? n : null;
+  } catch (e) { RAIN = null; }
   try { GLOF = await loadJSON(`${DATA}/glof.json`); } catch (e) { GLOF = null; }
   document.getElementById("method").textContent = OUT.meta.method +
     `  Recent window ${OUT.meta.recent_window[0]}–${OUT.meta.recent_window[1]}.`;
@@ -139,38 +139,40 @@ function renderNowcast(d) {
   const method = document.getElementById("nc-method");
   const missing = document.getElementById("nc-missing");
   const body = document.getElementById("nc-body");
-  if (!NOW) { missing.hidden = false; body.hidden = true; method.textContent = ""; return; }
+  if (!RAIN) { missing.hidden = false; body.hidden = true; method.textContent = ""; return; }
   missing.hidden = true; body.hidden = false;
-  method.textContent = NOW.model || "";
+  method.textContent = RAIN.note || "";
   document.getElementById("nc-asof").textContent =
-    `${NOW.source} — conditions for ${NOW.as_of}`;
+    `${RAIN.source} — ${RAIN.window_days}-day total to ${RAIN.as_of}`;
 
-  const rec = (NOW.districts || {})[d];
+  const rec = (RAIN.districts || {})[d];
   const dEl = document.getElementById("nc-district");
   if (rec) {
-    const col = rec.level === "high" ? "#b91c1c" : "#b45309";
+    const wet = rec.mm_win_max >= 150;
+    const col = wet ? "#0369a1" : "#475569";
     dEl.innerHTML =
-      `<b>${d}</b>: <span style="color:${col}">${rec.level.toUpperCase()}</span> ` +
-      `landslide hazard nowcast for ${NOW.as_of}. ` +
-      `${rec.moderate_plus_pct}% of the district flagged moderate+` +
-      (rec.high_pct ? `, ${rec.high_pct}% high` : "") + `.`;
+      `<b>${d}</b>: <span style="color:${col}">${Math.round(rec.mm_win_max)} mm</span> ` +
+      `peak over the last ${RAIN.window_days} day(s) ` +
+      `(district mean ${Math.round(rec.mm_win)} mm; last 24 h up to ` +
+      `${Math.round(rec.mm_24h_max)} mm).`;
   } else {
-    dEl.innerHTML = `<b>${d}</b>: not flagged in the ${NOW.as_of} nowcast.`;
+    dEl.innerHTML = `<b>${d}</b>: no IMERG cell inside the district in the latest window.`;
   }
 
   const list = document.getElementById("nc-list");
   list.innerHTML = "";
-  for (const name of NOW.elevated || []) {
-    const r = NOW.districts[name];
-    const s = document.createElement("span");
-    s.className = "chip on";
-    s.style.color = r.level === "high" ? "#b91c1c" : "#b45309";
-    s.textContent = `${name} · ${r.level}`;
-    s.onclick = () => { document.getElementById("d-pick").value = name; render(); };
-    list.appendChild(s);
+  for (const name of RAIN.wettest || []) {
+    const r = RAIN.districts[name];
+    if (!r) continue;
+    const s2 = document.createElement("span");
+    s2.className = "chip on";
+    s2.style.color = r.mm_win_max >= 150 ? "#0369a1" : "#475569";
+    s2.textContent = `${name} · ${Math.round(r.mm_win_max)} mm`;
+    s2.onclick = () => { document.getElementById("d-pick").value = name; render(); };
+    list.appendChild(s2);
   }
-  if (!(NOW.elevated || []).length)
-    list.innerHTML = "<span class='muted'>No districts flagged in the latest nowcast.</span>";
+  if (!(RAIN.wettest || []).length)
+    list.innerHTML = "<span class='muted'>No rainfall data in the latest window.</span>";
 }
 
 const LS_COLORS = ["#94a3b8", "#2c6ca0", "#0f766e", "#d97706", "#ea580c", "#b91c1c"];

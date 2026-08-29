@@ -920,12 +920,14 @@ map.on("mouseenter", "heat-points", () => (map.getCanvas().style.cursor = "point
 map.on("mouseleave", "heat-points", () => (map.getCanvas().style.cursor = ""));
 
 /* =========================================================================
-   ALERTS — recent recorded disasters + (if configured) today's landslide
-   nowcast. There is no minute-by-minute feed for Nepal; "recent" means the
-   most recent BIPAD records, "today" means the daily NASA LHASA nowcast.
+   ALERTS — recent recorded disasters + (if configured) recent rainfall from
+   NASA GPM IMERG, the main trigger for landslides and flash floods. There is
+   no minute-by-minute hazard feed for Nepal; "recent" means the newest BIPAD
+   records, rainfall is IMERG Late daily (~1 day behind).
    ========================================================================= */
 const RECENT_DAYS = 14;
-let NOWCAST = null;
+const RAIN_WET_MM = 100;               // window max mm that counts as "wet" for the badge
+let RAIN = null;
 let alertBuilt = false;
 
 function daysAgo(iso, ref) {
@@ -943,24 +945,30 @@ function recentEvents() {
       (b.properties.severity_score || 0) - (a.properties.severity_score || 0));
 }
 
+function wetDistricts() {
+  if (!RAIN || !RAIN.districts) return [];
+  return (RAIN.wettest || Object.keys(RAIN.districts))
+    .filter((n) => RAIN.districts[n] && RAIN.districts[n].mm_win_max >= RAIN_WET_MM);
+}
+
 async function initAlerts() {
   try {
-    const n = await loadJSON(`${window.NHM.DATA}/nowcast.json`);
-    NOWCAST = n && !n.unavailable ? n : null;
-  } catch (e) { NOWCAST = null; }
+    const n = await loadJSON(`${window.NHM.DATA}/rain.json`);
+    RAIN = n && !n.unavailable && n.as_of ? n : null;
+  } catch (e) { RAIN = null; }
 
   const rec = recentEvents();
   const worst = rec.find((f) =>
     ["major", "catastrophic"].includes(f.properties.severity_class)) || rec[0];
 
-  // badge: a count of elevated districts, or "!" if a big event is very recent
   const badge = document.getElementById("alert-badge");
   const btn = document.getElementById("alert-btn");
   const latest = rec[0] && rec[0].properties.date;
   const bigRecent = worst && ["major", "catastrophic"].includes(worst.properties.severity_class) &&
     daysAgo(worst.properties.date, latest) <= 10;
-  if (NOWCAST && (NOWCAST.elevated || []).length) {
-    badge.textContent = String(NOWCAST.elevated.length);
+  const wet = wetDistricts();
+  if (wet.length) {
+    badge.textContent = String(wet.length);
     badge.hidden = false; btn.classList.add("has-alert");
   } else if (bigRecent) {
     badge.textContent = "!"; badge.hidden = false; btn.classList.add("has-alert");
@@ -985,18 +993,22 @@ function toggleAlertCard(rec, worst) {
     </button>`;
   };
 
-  let nowSec = "";
-  if (NOWCAST && (NOWCAST.elevated || []).length) {
-    nowSec = `<h4>Elevated landslide hazard · ${NOWCAST.as_of}</h4>
-      <p class="ac-note">${NOWCAST.source}. Rainfall-driven model, not an observation.</p>
-      <div class="now-chips">${NOWCAST.elevated.map((n) => {
-        const r = NOWCAST.districts[n];
-        return `<span class="now-chip ${r.level}">${n}</span>`;
-      }).join("")}</div>
-      <button id="now-toggle" class="btn">Show on map</button>`;
+  let rainSec = "";
+  if (RAIN) {
+    const list = (RAIN.wettest || []).slice(0, 8);
+    rainSec = `<h4>Rainfall, last ${RAIN.window_days} day${RAIN.window_days === 1 ? "" : "s"}
+        <span class="muted">to ${RAIN.as_of}</span></h4>
+      <p class="ac-note">${RAIN.source}. Recent rain is the main trigger for
+        landslides and flash floods — this is not a hazard forecast.</p>
+      <div class="now-chips">${list.map((n) => {
+        const r = RAIN.districts[n];
+        const lvl = r.mm_win_max >= 150 ? "high" : r.mm_win_max >= RAIN_WET_MM ? "moderate" : "";
+        return `<span class="now-chip ${lvl}">${n} <b>${Math.round(r.mm_win_max)}mm</b></span>`;
+      }).join("") || "<span class='ac-note'>Nothing notable.</span>"}</div>
+      <button id="rain-toggle" class="btn">Show on map</button>`;
   } else {
-    nowSec = `<h4>Today's hazard nowcast</h4>
-      <p class="ac-note">Not configured. A daily landslide nowcast (NASA LHASA)
+    rainSec = `<h4>Recent rainfall</h4>
+      <p class="ac-note">Not configured. A daily rainfall layer (NASA GPM IMERG)
       can be switched on with a free Earthdata token — see
       <a href="methodology.html">methodology</a>. No live minute-by-minute feed
       exists for Nepal.</p>`;
@@ -1016,7 +1028,7 @@ function toggleAlertCard(rec, worst) {
       </div>` : `<p class="ac-note">No recorded events in the last ${RECENT_DAYS} days.</p>`}
     <h4>Recorded, last ${RECENT_DAYS} days <span class="muted">(${rec.length})</span></h4>
     <div class="alert-list">${rec.slice(0, 12).map(row).join("") || "<p class='ac-note'>None.</p>"}</div>
-    ${nowSec}
+    ${rainSec}
     <p class="ac-foot">"Latest" is the newest BIPAD record, not a real-time alert.
       Records appear hours to days after an event.</p>`;
 
@@ -1034,33 +1046,33 @@ function toggleAlertCard(rec, worst) {
   };
   card.querySelectorAll(".ac-fly, .alert-row").forEach((el) => (el.onclick = () => fly(el)));
 
-  const nt = document.getElementById("now-toggle");
-  if (nt) nt.onclick = () => toggleNowcastLayer(nt);
+  const rt = document.getElementById("rain-toggle");
+  if (rt) rt.onclick = () => toggleRainLayer(rt);
 }
 
-/* nowcast overlay: tint the districts flagged today */
-function toggleNowcastLayer(btn) {
-  if (map.getLayer("nowcast-fill")) {
-    const vis = map.getLayoutProperty("nowcast-fill", "visibility") !== "none";
-    map.setLayoutProperty("nowcast-fill", "visibility", vis ? "none" : "visible");
+/* rainfall overlay: tint every district by its last-window max mm (blue scale) */
+function toggleRainLayer(btn) {
+  if (map.getLayer("rain-fill")) {
+    const vis = map.getLayoutProperty("rain-fill", "visibility") !== "none";
+    map.setLayoutProperty("rain-fill", "visibility", vis ? "none" : "visible");
+    map.setLayoutProperty("rain-line", "visibility", vis ? "none" : "visible");
     btn.textContent = vis ? "Show on map" : "Hide on map";
     return;
   }
-  if (!state.data.districts || !NOWCAST) return;
-  const level = {};
-  for (const [name, r] of Object.entries(NOWCAST.districts)) level[name] = r.level;
-  const expr = ["match", ["get", "district"]];
-  const high = Object.keys(level).filter((k) => level[k] === "high");
-  const mod = Object.keys(level).filter((k) => level[k] === "moderate");
-  if (high.length) expr.push(high, "#dc2626");
-  if (mod.length) expr.push(mod, "#f59e0b");
-  expr.push("rgba(0,0,0,0)");
-  map.addSource("nowcast", { type: "geojson", data: state.data.districts });
-  map.addLayer({ id: "nowcast-fill", type: "fill", source: "nowcast",
-    paint: { "fill-color": expr, "fill-opacity": 0.35 } });
-  map.addLayer({ id: "nowcast-line", type: "line", source: "nowcast",
-    filter: ["in", ["get", "district"], ["literal", [...high, ...mod]]],
-    paint: { "line-color": "#b91c1c", "line-width": 1.2, "line-opacity": 0.7 } });
+  if (!state.data.districts || !RAIN) return;
+  const names = [], mm = [];
+  for (const [name, r] of Object.entries(RAIN.districts)) { names.push(name); mm.push(r.mm_win_max); }
+  const pick = ["match", ["get", "district"]];
+  names.forEach((n, i) => pick.push(n, mm[i]));
+  pick.push(0);
+  const fillColor = ["interpolate", ["linear"], pick,
+    0, "rgba(0,0,0,0)", 15, "#e0f2fe", 50, "#bae6fd",
+    100, "#7dd3fc", 150, "#38bdf8", 220, "#0284c7"];
+  map.addSource("rain", { type: "geojson", data: state.data.districts });
+  map.addLayer({ id: "rain-fill", type: "fill", source: "rain",
+    paint: { "fill-color": fillColor, "fill-opacity": 0.45 } });
+  map.addLayer({ id: "rain-line", type: "line", source: "rain",
+    filter: ["in", ["get", "district"], ["literal", wetDistricts()]],
+    paint: { "line-color": "#0369a1", "line-width": 1.2, "line-opacity": 0.7 } });
   btn.textContent = "Hide on map";
 }
-

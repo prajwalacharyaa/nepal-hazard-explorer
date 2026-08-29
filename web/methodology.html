@@ -121,9 +121,14 @@
       <li><b>Recorded, last 14 days</b> — the most recent BIPAD incidents.
         These appear hours to days after an event and our copy refreshes weekly,
         so "latest" means latest <i>recorded</i>, not latest <i>occurred</i>.</li>
-      <li><b>Elevated landslide hazard today</b> — the NASA LHASA daily nowcast
-        (rainfall-driven model, not observations), if it has been configured
-        with a free Earthdata token. Until then the panel says so.</li>
+      <li><b>Rainfall, last 3 days</b> — per-district totals from NASA GPM
+        IMERG Late daily precipitation, the main trigger for landslides and
+        flash floods (about a day behind real time). Shown if configured with a
+        free Earthdata token and the GES DISC data-archive EULA accepted; until
+        then the panel says so. It is rainfall, not a hazard forecast — heavy
+        rain does not always cause an impact, and impacts happen without it.
+        The retired NASA LHASA landslide nowcast previously sat here; its
+        archive ends February 2021.</li>
     </ul>
     <p>For official flood and weather warnings use Nepal's Department of
       Hydrology and Meteorology.</p>
@@ -159,8 +164,8 @@
     <p>The <a href="experimental.html">experimental section</a> is walled off and
       carries its own disclaimer. It contains: (D) a descriptive seasonal
       climatology from this dataset — <b>not a forecast</b>; (A) zonal summaries
-      of published global susceptibility / flood-hazard models; (C) the NASA
-      LHASA daily rainfall-driven nowcast; and (B) a curated dangerous-glacial-lake
+      of published global susceptibility / flood-hazard models; (C) recent
+      rainfall from NASA GPM IMERG; and (B) a curated dangerous-glacial-lake
       inventory paired with the historical record of its downstream river
       corridor. None of these predict a specific event.</p>
 
@@ -173,7 +178,7 @@
       <li><code>district_index.json</code>, <code>palika_index.json</code> — rollups</li>
       <li><code>calendar.json</code>, <code>outlook.json</code>,
         <code>glof.json</code>, <code>susceptibility.json</code>,
-        <code>nowcast.json</code></li>
+        <code>rain.json</code></li>
       <li><code>meta.json</code> — build date, counts, span, latest event</li>
     </ul>
     <p>The map's download button exports whatever is currently filtered as CSV +
