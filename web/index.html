@@ -33,6 +33,15 @@
     </div>
 
     <div class="panel-body">
+      <div class="field" id="year-group">
+        <span class="field-label">Years <b id="year-label"></b></span>
+        <div class="range-wrap">
+          <input type="range" id="year-min" aria-label="Earliest year" />
+          <input type="range" id="year-max" aria-label="Latest year" />
+        </div>
+      </div>
+      <div id="stats" aria-live="polite"></div>
+
       <div class="field">
         <span class="field-label" id="find-label">Find your area</span>
         <button id="near-me" class="btn btn-primary" type="button">
@@ -64,13 +73,6 @@
         <div id="hazard-filter" class="pills" role="group" aria-label="Filter by hazard type"></div>
       </div>
 
-      <div class="field" id="year-group">
-        <span class="field-label">Years <b id="year-label"></b></span>
-        <div class="range-wrap">
-          <input type="range" id="year-min" aria-label="Earliest year" />
-          <input type="range" id="year-max" aria-label="Latest year" />
-        </div>
-      </div>
 
       <label class="switch">
         <input type="checkbox" id="precise-only" />
@@ -97,7 +99,6 @@
         </select>
       </div>
 
-      <div id="stats" aria-live="polite"></div>
       <button id="reset-filters" class="btn" type="button" hidden>Reset all filters</button>
 
       <details class="more">
