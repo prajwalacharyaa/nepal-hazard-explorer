@@ -1354,22 +1354,50 @@ body.impact { height: 100%; overflow: hidden; }
 
 /* mobile: info ("i") + locate controls stacked top-right */
 @media (max-width: 899px) {
-  .maplibregl-ctrl-top-right { top: 10px; right: 10px; }
-  .maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 0 0 8px auto; }
+  .maplibregl-ctrl-top-right { top: 12px; right: 12px; }
+  .maplibregl-ctrl-top-right .maplibregl-ctrl { margin: 0 0 10px auto; }
   .maplibregl-ctrl-bottom-right { bottom: 10px; right: 10px; }
+
+  /* bigger, easier-to-hit locate button on phones */
+  .maplibregl-ctrl-top-right .maplibregl-ctrl-group {
+    border-radius: 999px;
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+  }
+  .maplibregl-ctrl-top-right .maplibregl-ctrl-group button {
+    width: 46px;
+    height: 46px;
+    border-radius: 999px;
+  }
+  .maplibregl-ctrl-top-right .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+    transform: scale(1.35);
+  }
   /* keep the attribution as a round "i" until tapped, never the full bar */
   .maplibregl-ctrl-attrib.maplibregl-compact {
-    min-height: 30px; min-width: 30px;
     border-radius: 999px !important;
     box-shadow: var(--shadow-md);
   }
   .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) {
-    padding: 0 !important; background: var(--surface);
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 !important;
+    background: var(--surface);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show)
     .maplibregl-ctrl-attrib-inner { display: none; }
-  .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) {
-    width: 30px; overflow: hidden;
+  /* the "i" button itself: MapLibre absolutely-positions it top-right; recentre it */
+  .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show)
+    .maplibregl-ctrl-attrib-button {
+    position: static;
+    margin: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background-position: center;
   }
-  .maplibregl-ctrl-attrib-button { border-radius: 999px; }
 }
