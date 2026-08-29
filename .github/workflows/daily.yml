@@ -1,0 +1,73 @@
+name: Daily refresh (rainfall + alerts)
+
+# Two things that go stale on their own, refreshed together each morning:
+#
+#   rain.json          last few days of NASA GPM IMERG Late daily precipitation,
+#                      summarised per district. Needs repo secret
+#                      EARTHDATA_TOKEN (https://urs.earthdata.nasa.gov/profile
+#                      -> Generate Token) AND a one-time click accepting the
+#                      "NASA GESDISC DATA ARCHIVE" EULA on that same page.
+#
+#   active_alerts.json areas still under a decaying post-event alert. This one
+#                      changes purely with the passage of time — an alert steps
+#                      high -> elevated -> watch and then expires — so it needs
+#                      a daily run even when no new event has been recorded.
+#                      No network, no secret.
+#
+# The alert step runs even if the rainfall step fails, because a missing
+# Earthdata token must not also freeze the alerts.
+
+on:
+  schedule:
+    - cron: "40 7 * * *"      # 07:40 UTC — IMERG Late lands ~12-18h after midnight UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install requests numpy geopandas shapely xarray h5netcdf h5py
+
+      - name: Fetch rainfall
+        id: rain
+        continue-on-error: true
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+        run: python pipeline/fetch_rain.py
+
+      - name: Refresh active alerts
+        if: always()
+        run: python pipeline/active_alerts.py
+
+      - name: Commit if changed
+        if: always()
+        run: |
+          FILES="data/processed/rain.json data/processed/active_alerts.json"
+          if git diff --quiet -- $FILES; then
+            echo "no change"; exit 0
+          fi
+          git config user.name  "data-bot"
+          git config user.email "data-bot@users.noreply.github.com"
+          git add $FILES
+          git commit -m "daily: $(date -u +%F)"
+          git push
+
+      - name: Report rainfall failure
+        if: steps.rain.outcome == 'failure'
+        run: |
+          echo "::warning::fetch_rain.py failed — alerts were still refreshed."
+          echo "Check the EARTHDATA_TOKEN secret and that the GES DISC EULA is accepted."

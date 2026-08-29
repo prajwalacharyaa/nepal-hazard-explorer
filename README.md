@@ -73,7 +73,8 @@ python glacial_lakes.py      # -> glacial_lakes.json (every mapped lake in Nepal
                              #    with its measured 2016->2022 area change;
                              #    needs the HMA inventory, see DATA_SOURCES §9)
 python active_alerts.py      # -> active_alerts.json (areas under a decaying
-                             #    post-event alert; run daily, self-expiring)
+                             #    post-event alert; the daily Action runs this,
+                             #    it is self-expiring so it needs a daily run)
 python calibrate.py          # -> risk_model.json  (back-tests the terrain gates
                              #    against the event record; needs scikit-learn)
 python surge_paths.py        # -> surge_paths.json  (routes a glacial-lake /

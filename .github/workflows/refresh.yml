@@ -62,6 +62,10 @@ jobs:
           python aggregate.py
           python outlook.py
           python glof.py
+          # events.geojson has just been rebuilt, so recompute the alerts it
+          # implies now rather than leaving a new severe event unflagged until
+          # the daily job next runs
+          python active_alerts.py
 
       - name: Commit if changed
         run: |
