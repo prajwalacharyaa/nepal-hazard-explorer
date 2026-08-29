@@ -96,17 +96,20 @@ function render(feat, siblings) {
   const dl = document.getElementById("e-district-link");
   dl.href = `district.html?d=${encodeURIComponent(dslug)}`;
 
-  // offer the richer impact view when a corridor was traced for this event
+  // offer the richer impact view when a corridor was traced for this event:
+  // the zoomed map, the downstream corridor and the flow animation
   fetch(`${window.NHM.DATA}/corridors_index.json`)
     .then((r) => (r.ok ? r.json() : null))
     .then((idx) => {
-      if (!idx || !idx[p.id]) return;
-      const a = document.createElement("a");
-      a.className = "secondary";
-      a.target = "_blank"; a.rel = "noopener";
-      a.href = `impact.html?id=${encodeURIComponent(p.id)}&d=${dslug}`;
-      a.textContent = `Impact view — ${idx[p.id].length_km} km corridor ↗`;
-      dl.insertAdjacentElement("afterend", a);
+      const rec = idx && idx[p.id];
+      if (!rec) return;
+      const cta = document.getElementById("e-impact");
+      cta.href = `impact.html?id=${encodeURIComponent(p.id)}&d=${dslug}`;
+      document.getElementById("e-impact-sub").textContent =
+        `Zoomed map, the ${rec.length_km} km downstream corridor` +
+        (rec.documented ? " (documented reach)" : "") +
+        `, and the flow animation from here to the end of the reach.`;
+      cta.hidden = false;
     })
     .catch(() => {});
 

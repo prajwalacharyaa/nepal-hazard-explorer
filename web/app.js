@@ -1648,7 +1648,9 @@ function renderAnalysis(d) {
     ? recentSrc.map((n) => {
         const p = n.p;
         const col = HAZARD_COLORS[p.hazard] || "#888";
-        return '<li>' +
+        const href = 'event.html?id=' + encodeURIComponent(p.id) +
+          '&d=' + slugify(p.district || "");
+        return '<li><a href="' + href + '" title="Open this record">' +
           '<span class="anr-dot" style="background:' + col + '"></span>' +
           '<span class="anr-main">' +
             '<span class="anr-haz" style="color:' + col + '">' + hazardName(p.hazard) + '</span>' +
@@ -1656,7 +1658,10 @@ function renderAnalysis(d) {
             (p.deaths ? ' · ' + fmt(p.deaths) + ' dead' : "") + '</span>' +
           '</span>' +
           '<span class="anr-km">' + n.km.toFixed(1) + '<i>km</i></span>' +
-        '</li>';
+          '<span class="anr-go"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" ' +
+            'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" ' +
+            'stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>' +
+        '</a></li>';
       }).join("")
     : '<li class="anr-none">Nothing recorded within ' + CONTEXT_KM +
       ' km in the last 15 years. Pre-2011 records are sparse, so stay alert anyway.</li>';
