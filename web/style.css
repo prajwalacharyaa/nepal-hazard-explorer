@@ -197,7 +197,7 @@ h1, h2, h3 {
     transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
   }
   .panel-body { padding-left: 16px; padding-right: 16px; }
-  #panel[data-state="peek"] { transform: translateY(calc(100% - 156px)); }
+  #panel[data-state="peek"] { transform: translateY(calc(100% - 248px)); }
   #panel[data-state="open"] { transform: translateY(0); }
   #panel-handle {
     display: block;

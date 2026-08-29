@@ -29,7 +29,14 @@ const map = new maplibregl.Map({
   attributionControl: { compact: true },
 });
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
-map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: false }), "bottom-right");
+const geolocate = new maplibregl.GeolocateControl({
+  positionOptions: { enableHighAccuracy: true, timeout: 10000 },
+  fitBoundsOptions: { maxZoom: 14 },
+  trackUserLocation: false,
+  showUserLocation: true,
+  showAccuracyCircle: true,
+});
+map.addControl(geolocate, "bottom-right");
 window.__map = map;                       // handy when debugging in the console
 
 /* A blank basemap should say why — but individual tile requests fail or abort
@@ -653,26 +660,29 @@ document.getElementById("heat-boost").oninput = (e) => {
 };
 document.getElementById("precise-only").onchange = (e) => { state.preciseOnly = e.target.checked; refresh(); };
 
-document.getElementById("near-me").onclick = () => {
-  const btn = document.getElementById("near-me");
-  const label = btn.innerHTML;
-  const restore = () => (btn.innerHTML = label);
-  btn.textContent = "Locating…";
-  if (!navigator.geolocation) { restore(); toast("Geolocation isn't available in this browser."); return; }
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      restore();
-      const pt = [pos.coords.longitude, pos.coords.latitude];
-      map.flyTo({ center: pt, zoom: 9 });
-      collapsePanel();
-      const d = districtAt(pt);
-      if (d) openAreaCard(d, { lng: pt[0], lat: pt[1] });
-      else toast("Your location isn't inside a Nepal district in this dataset.");
-    },
-    () => { restore(); toast("Could not get your location — check browser permissions."); },
-    { enableHighAccuracy: true, timeout: 10000 },
-  );
+const nearBtn = document.getElementById("near-me");
+const nearHTML = nearBtn.innerHTML;
+function resetNear() { nearBtn.disabled = false; nearBtn.innerHTML = nearHTML; }
+nearBtn.onclick = () => {
+  if (!navigator.geolocation) { toast("Geolocation isn't available in this browser."); return; }
+  nearBtn.disabled = true;
+  nearBtn.innerHTML = nearHTML.replace("My location", "Locating…");
+  // same code path as the crosshair control bottom-right: it prompts for
+  // permission when needed, flies to the real position and shows the dot
+  const fired = geolocate.trigger();
+  if (!fired) resetNear();
 };
+geolocate.on("geolocate", () => { resetNear(); collapsePanel(); });
+geolocate.on("error", (e) => {
+  resetNear();
+  toast(e && e.code === 1
+    ? "Location is blocked for this site. Enable it in your browser's site settings, then try again."
+    : "Could not get your location. Try again, or search for a place instead.");
+});
+geolocate.on("outofmaxbounds", () => {
+  resetNear();
+  toast("You appear to be outside Nepal — search for a district or municipality instead.");
+});
 
 /* mobile bottom-sheet handle */
 const panelEl = document.getElementById("panel");
