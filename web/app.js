@@ -1315,10 +1315,16 @@ function renderAnalysis(d) {
   const recent = d.recentList.length
     ? d.recentList.map((n) => {
         const p = n.p;
-        return '<li><span class="anr-haz" style="color:' + (HAZARD_COLORS[p.hazard] || "") + '">' +
-          hazardName(p.hazard) + '</span>' +
-          '<span class="anr-meta">' + n.km.toFixed(1) + ' km · ' + readableDate(p.date) +
-          (p.deaths ? ' · ' + fmt(p.deaths) + ' dead' : "") + '</span></li>';
+        const col = HAZARD_COLORS[p.hazard] || "#888";
+        return '<li>' +
+          '<span class="anr-dot" style="background:' + col + '"></span>' +
+          '<span class="anr-main">' +
+            '<span class="anr-haz" style="color:' + col + '">' + hazardName(p.hazard) + '</span>' +
+            '<span class="anr-meta">' + readableDate(p.date) +
+            (p.deaths ? ' · ' + fmt(p.deaths) + ' dead' : "") + '</span>' +
+          '</span>' +
+          '<span class="anr-km">' + n.km.toFixed(1) + '<i>km</i></span>' +
+        '</li>';
       }).join("")
     : '<li class="anr-none">Nothing recorded within ' + CONTEXT_KM +
       ' km in the last 12 years. Pre-2011 records are sparse, so stay alert anyway.</li>';
@@ -1336,9 +1342,12 @@ function renderAnalysis(d) {
 
     '<div class="an-facs">' + d.factors.map(facChip).join("") + '</div>' +
 
-    '<div class="an-map-box" id="an-map-box"></div>' +
-    '<p class="an-maplegend">Dots = recorded incidents, coloured by type, bigger = worse. ' +
-      'Ring = ' + d.radiusKm + ' km around you.</p>' +
+    '<div class="an-sec"><h3>Affected area around you</h3>' +
+      '<div class="an-map-box" id="an-map-box"></div>' +
+      '<p class="an-maplegend">Heat = concentration of past incidents. Dots are the ' +
+        'individual records, coloured by type, bigger = worse. ' +
+        'Ring = ' + d.radiusKm + ' km around you.</p>' +
+    '</div>' +
 
     '<div class="an-sec"><h3>Recently near here</h3><ul class="an-recent">' + recent + '</ul></div>' +
 
@@ -1393,17 +1402,19 @@ function buildAnMiniMap(d) {
       data: { type: "FeatureCollection", features: feats } });
     m.addLayer({ id: "an-ev-heat", type: "heatmap", source: "an-ev",
       paint: {
-        "heatmap-weight": ["interpolate", ["linear"], ["get", "sev"], 0, 0.25, 200, 1],
-        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 8, 16, 13, 42],
-        "heatmap-opacity": 0.5,
+        "heatmap-weight": ["interpolate", ["linear"], ["get", "sev"], 0, 0.4, 200, 1],
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 8, 1, 13, 2.4],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 8, 22, 13, 60],
+        "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], ...THEME.heat],
+        "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 14, 0.55],
       } });
     const hzColor = ["match", ["get", "hazard"]];
     Object.entries(HAZARD_COLORS).forEach(([h, c]) => hzColor.push(h, c));
     hzColor.push("#888");
     m.addLayer({ id: "an-ev-dot", type: "circle", source: "an-ev",
       paint: {
-        "circle-radius": ["interpolate", ["linear"], ["get", "sev"], 0, 3.5, 50, 6, 400, 11],
-        "circle-color": hzColor, "circle-opacity": 0.85,
+        "circle-radius": ["interpolate", ["linear"], ["get", "sev"], 0, 3, 50, 5.5, 400, 10],
+        "circle-color": hzColor, "circle-opacity": 0.9,
         "circle-stroke-width": 1.2, "circle-stroke-color": "#fff",
       } });
 
