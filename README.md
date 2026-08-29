@@ -238,7 +238,17 @@ Two stages need credentials or a manual download:
 - `fetch_rain.py` needs a free [Earthdata](https://urs.earthdata.nasa.gov/)
   token in `EARTHDATA_TOKEN` **and** a one-time click accepting the "NASA GESDISC
   DATA ARCHIVE" EULA on your profile page. Copy `.env.example` to `.env` and put
-  the token there. Without it the script exits cleanly and the panel says so.
+  the token there.
+
+  It's the only credential in the project, and it feeds exactly one file,
+  `rain.json`. Without it you lose the rainfall section of the alerts panel, the
+  "Rain now" chip, the rain term in the risk score, and experimental section C.
+  Everything else — map, districts, corridors, impact views, terrain analysis,
+  GLOF and dam routing, alerts, climate — works with no credentials.
+
+  A committed `rain.json` older than 5 days is dropped rather than shown, so a
+  deploy without the token (or a job that quietly stops) degrades to "not
+  configured" instead of presenting last month's rain as today's.
 - `glacial_lakes.py` needs the HMA inventory shapefiles downloaded once
   (~300 MB). See [pipeline/DATA_SOURCES.md](pipeline/DATA_SOURCES.md) §9.
 

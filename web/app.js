@@ -1034,6 +1034,24 @@ function flyToDistrict(name) {
   openAreaCard(name);
 }
 let RAIN = null;
+let RAIN_STALE = null;          // set when we had data but it is too old to use
+
+// IMERG Late lands ~1 day behind and we sum a 3-day window, so anything past
+// this is either a failed refresh or an unconfigured deploy. Either way it
+// must not be presented as current, and must not feed the score.
+const RAIN_MAX_AGE_DAYS = 5;
+
+/* rain.json, rejected if it is too old to describe today. */
+async function loadRain() {
+  RAIN = null; RAIN_STALE = null;
+  let n;
+  try { n = await loadJSON(`${window.NHM.DATA}/rain.json`); }
+  catch (e) { return; }
+  if (!n || n.unavailable || !n.as_of) return;
+  const age = Math.floor((Date.now() - Date.parse(n.as_of)) / 86400000);
+  if (age > RAIN_MAX_AGE_DAYS) { RAIN_STALE = { as_of: n.as_of, age }; return; }
+  RAIN = n;
+}
 
 function daysAgo(iso, ref) {
   return Math.round((Date.parse(ref) - Date.parse(iso)) / 86400000);
@@ -1057,10 +1075,7 @@ function wetDistricts() {
 }
 
 async function initAlerts() {
-  try {
-    const n = await loadJSON(`${window.NHM.DATA}/rain.json`);
-    RAIN = n && !n.unavailable && n.as_of ? n : null;
-  } catch (e) { RAIN = null; }
+  await loadRain();
 
   const rec = recentEvents();
   const worst = rec.find((f) =>
@@ -1119,11 +1134,18 @@ function toggleAlertCard(rec, worst) {
       }).join("")}<span class="rl-unit">mm · ${RAIN.window_days}d peak</span></div>
       <button id="rain-toggle" class="btn">Show on map</button>`;
   } else {
-    rainSec = `<h4>Recent rainfall</h4>
-      <p class="ac-note">Not configured. A daily rainfall layer (NASA GPM IMERG)
-      can be switched on with a free Earthdata token — see
-      <a href="methodology.html">methodology</a>. No live minute-by-minute feed
-      exists for Nepal.</p>`;
+    rainSec = RAIN_STALE
+      ? `<h4>Recent rainfall</h4>
+         <p class="ac-note">The rainfall feed has not refreshed since
+         ${RAIN_STALE.as_of} (${RAIN_STALE.age} days ago), so it is not being
+         shown or counted — stale rain is worse than none. The daily job that
+         updates it has probably stopped; see
+         <a href="methodology.html">methodology</a>.</p>`
+      : `<h4>Recent rainfall</h4>
+         <p class="ac-note">Not configured. A daily rainfall layer (NASA GPM IMERG)
+         can be switched on with a free Earthdata token — see
+         <a href="methodology.html">methodology</a>. No live minute-by-minute feed
+         exists for Nepal.</p>`;
   }
 
   card.innerHTML = `<button class="x" aria-label="Close">×</button>
@@ -1814,7 +1836,8 @@ function analysePoint(lon, lat, T) {
     { key: "Your ground", lvl: groundLvl,
       text: T ? `${fmt(T.elev)} m · +${T.hand} m over low · ${T.slopeDeg}°` : "elevation unavailable" },
     { key: "Rain now", lvl: rainLvl,
-      text: rainMM == null ? "not configured" : `${Math.round(rainMM)} mm / ${RAIN.window_days}d` },
+      text: rainMM != null ? `${Math.round(rainMM)} mm / ${RAIN.window_days}d`
+        : RAIN_STALE ? `feed stale, not counted` : "not configured" },
     { key: "Plausible here", lvl: histLvl,
       text: live.length ? live.map((h) => anHazLabel(h.hz)).slice(0, 2).join(", ") : "nothing significant" },
   ];

@@ -16,8 +16,11 @@ async function init() {
   }
   try { SUSC = await loadJSON(`${DATA}/susceptibility.json`); } catch (e) { SUSC = null; }
   try {
+    // same 5-day cutoff as the map: a stale feed must not read as current
     const n = await loadJSON(`${DATA}/rain.json`);
-    RAIN = n && !n.unavailable && n.as_of ? n : null;
+    const age = n && n.as_of
+      ? Math.floor((Date.now() - Date.parse(n.as_of)) / 86400000) : 1e9;
+    RAIN = n && !n.unavailable && n.as_of && age <= 5 ? n : null;
   } catch (e) { RAIN = null; }
   try { GLOF = await loadJSON(`${DATA}/glof.json`); } catch (e) { GLOF = null; }
   document.getElementById("method").textContent = OUT.meta.method +
