@@ -126,6 +126,7 @@ async function loadAll() {
   document.getElementById("heat-boost").value = state.heatBoost;
   document.getElementById("heat-label").textContent = `${state.heatBoost.toFixed(1)}×`;
   updateStats();                       // panel is useful before the map paints
+  initAlerts();                        // needs state.data.events
   const go = () => setView(initialView || "heatmap");
   map.loaded() ? go() : map.once("load", go);
 }
@@ -915,3 +916,149 @@ map.on("click", "heat-points", (e) => {
 });
 map.on("mouseenter", "heat-points", () => (map.getCanvas().style.cursor = "pointer"));
 map.on("mouseleave", "heat-points", () => (map.getCanvas().style.cursor = ""));
+
+/* =========================================================================
+   ALERTS — recent recorded disasters + (if configured) today's landslide
+   nowcast. There is no minute-by-minute feed for Nepal; "recent" means the
+   most recent BIPAD records, "today" means the daily NASA LHASA nowcast.
+   ========================================================================= */
+const RECENT_DAYS = 14;
+let NOWCAST = null;
+let alertBuilt = false;
+
+function daysAgo(iso, ref) {
+  return Math.round((Date.parse(ref) - Date.parse(iso)) / 86400000);
+}
+
+function recentEvents() {
+  if (!state.data.events) return [];
+  const latest = state.data.events.features
+    .reduce((m, f) => (f.properties.date > m ? f.properties.date : m), "0000");
+  return state.data.events.features
+    .filter((f) => f.geometry && daysAgo(f.properties.date, latest) <= RECENT_DAYS)
+    .sort((a, b) =>
+      b.properties.date.localeCompare(a.properties.date) ||
+      (b.properties.severity_score || 0) - (a.properties.severity_score || 0));
+}
+
+async function initAlerts() {
+  try {
+    const n = await loadJSON(`${window.NHM.DATA}/nowcast.json`);
+    NOWCAST = n && !n.unavailable ? n : null;
+  } catch (e) { NOWCAST = null; }
+
+  const rec = recentEvents();
+  const worst = rec.find((f) =>
+    ["major", "catastrophic"].includes(f.properties.severity_class)) || rec[0];
+
+  // badge: a count of elevated districts, or "!" if a big event is very recent
+  const badge = document.getElementById("alert-badge");
+  const btn = document.getElementById("alert-btn");
+  const latest = rec[0] && rec[0].properties.date;
+  const bigRecent = worst && ["major", "catastrophic"].includes(worst.properties.severity_class) &&
+    daysAgo(worst.properties.date, latest) <= 10;
+  if (NOWCAST && (NOWCAST.elevated || []).length) {
+    badge.textContent = String(NOWCAST.elevated.length);
+    badge.hidden = false; btn.classList.add("has-alert");
+  } else if (bigRecent) {
+    badge.textContent = "!"; badge.hidden = false; btn.classList.add("has-alert");
+  }
+
+  btn.onclick = () => toggleAlertCard(rec, worst);
+}
+
+function toggleAlertCard(rec, worst) {
+  const card = document.getElementById("alert-card");
+  const btn = document.getElementById("alert-btn");
+  if (!card.hidden) { card.hidden = true; btn.setAttribute("aria-expanded", "false"); return; }
+
+  const row = (f) => {
+    const p = f.properties;
+    return `<button class="alert-row" data-lon="${f.geometry.coordinates[0]}" data-lat="${f.geometry.coordinates[1]}"
+              data-id="${p.id}" data-d="${slugify(p.district || "")}">
+      <span class="ar-date">${readableDate(p.date, p.date_precision)}</span>
+      <span class="ar-haz" style="color:${HAZARD_COLORS[p.hazard] || ""}">${hazardName(p.hazard)}</span>
+      <span class="ar-place">${p.district || ""}</span>
+      <span class="ar-toll">${p.deaths ? p.deaths + "†" : ""}</span>
+    </button>`;
+  };
+
+  let nowSec = "";
+  if (NOWCAST && (NOWCAST.elevated || []).length) {
+    nowSec = `<h4>Elevated landslide hazard · ${NOWCAST.as_of}</h4>
+      <p class="ac-note">${NOWCAST.source}. Rainfall-driven model, not an observation.</p>
+      <div class="now-chips">${NOWCAST.elevated.map((n) => {
+        const r = NOWCAST.districts[n];
+        return `<span class="now-chip ${r.level}">${n}</span>`;
+      }).join("")}</div>
+      <button id="now-toggle" class="btn">Show on map</button>`;
+  } else {
+    nowSec = `<h4>Today's hazard nowcast</h4>
+      <p class="ac-note">Not configured. A daily landslide nowcast (NASA LHASA)
+      can be switched on with a free Earthdata token — see
+      <a href="methodology.html">methodology</a>. No live minute-by-minute feed
+      exists for Nepal.</p>`;
+  }
+
+  card.innerHTML = `<button class="x" aria-label="Close">×</button>
+    <h3>Alerts</h3>
+    ${worst ? `<div class="ac-worst">
+        <span class="ac-tag">most severe, last ${RECENT_DAYS} days</span>
+        <p class="ac-worst-line"><b style="color:${HAZARD_COLORS[worst.properties.hazard]}">
+          ${hazardName(worst.properties.hazard)}</b> — ${worst.properties.district}
+          — ${readableDate(worst.properties.date)}${worst.properties.deaths ?
+          ` — ${fmt(worst.properties.deaths)} dead` : ""}</p>
+        <button class="btn ac-fly" data-lon="${worst.geometry.coordinates[0]}"
+          data-lat="${worst.geometry.coordinates[1]}" data-id="${worst.properties.id}"
+          data-d="${slugify(worst.properties.district || "")}">Show on map</button>
+      </div>` : `<p class="ac-note">No recorded events in the last ${RECENT_DAYS} days.</p>`}
+    <h4>Recorded, last ${RECENT_DAYS} days <span class="muted">(${rec.length})</span></h4>
+    <div class="alert-list">${rec.slice(0, 12).map(row).join("") || "<p class='ac-note'>None.</p>"}</div>
+    ${nowSec}
+    <p class="ac-foot">"Latest" is the newest BIPAD record, not a real-time alert.
+      Records appear hours to days after an event.</p>`;
+
+  card.hidden = false;
+  btn.setAttribute("aria-expanded", "true");
+  card.querySelector(".x").onclick = () => { card.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+
+  const fly = (el) => {
+    const lon = +el.dataset.lon, lat = +el.dataset.lat;
+    map.flyTo({ center: [lon, lat], zoom: 10, duration: 900 });
+    collapsePanel();
+    if (el.dataset.id && el.dataset.id.startsWith("desinventar")) return;
+    const d = districtAt([lon, lat]);
+    if (d) { openAreaCard(d); }
+  };
+  card.querySelectorAll(".ac-fly, .alert-row").forEach((el) => (el.onclick = () => fly(el)));
+
+  const nt = document.getElementById("now-toggle");
+  if (nt) nt.onclick = () => toggleNowcastLayer(nt);
+}
+
+/* nowcast overlay: tint the districts flagged today */
+function toggleNowcastLayer(btn) {
+  if (map.getLayer("nowcast-fill")) {
+    const vis = map.getLayoutProperty("nowcast-fill", "visibility") !== "none";
+    map.setLayoutProperty("nowcast-fill", "visibility", vis ? "none" : "visible");
+    btn.textContent = vis ? "Show on map" : "Hide on map";
+    return;
+  }
+  if (!state.data.districts || !NOWCAST) return;
+  const level = {};
+  for (const [name, r] of Object.entries(NOWCAST.districts)) level[name] = r.level;
+  const expr = ["match", ["get", "district"]];
+  const high = Object.keys(level).filter((k) => level[k] === "high");
+  const mod = Object.keys(level).filter((k) => level[k] === "moderate");
+  if (high.length) expr.push(high, "#dc2626");
+  if (mod.length) expr.push(mod, "#f59e0b");
+  expr.push("rgba(0,0,0,0)");
+  map.addSource("nowcast", { type: "geojson", data: state.data.districts });
+  map.addLayer({ id: "nowcast-fill", type: "fill", source: "nowcast",
+    paint: { "fill-color": expr, "fill-opacity": 0.35 } });
+  map.addLayer({ id: "nowcast-line", type: "line", source: "nowcast",
+    filter: ["in", ["get", "district"], ["literal", [...high, ...mod]]],
+    paint: { "line-color": "#b91c1c", "line-width": 1.2, "line-opacity": 0.7 } });
+  btn.textContent = "Hide on map";
+}
+

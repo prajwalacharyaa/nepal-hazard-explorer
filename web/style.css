@@ -1401,3 +1401,103 @@ body.impact { height: 100%; overflow: hidden; }
     background-position: center;
   }
 }
+
+/* ============================================================================
+   ALERT BUTTON + CARD
+   ========================================================================== */
+#alert-btn {
+  position: fixed;
+  z-index: 11;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+#alert-btn:hover { background: #b91c1c; }
+#alert-btn.has-alert { animation: alertPulse 2s ease-in-out infinite; }
+@keyframes alertPulse {
+  0%, 100% { box-shadow: var(--shadow-md), 0 0 0 0 rgba(220, 38, 38, 0.45); }
+  50%      { box-shadow: var(--shadow-md), 0 0 0 8px rgba(220, 38, 38, 0); }
+}
+#alert-badge {
+  position: absolute;
+  top: -4px; right: -4px;
+  min-width: 17px; height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--danger);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  border: 1.5px solid var(--danger);
+}
+/* desktop: sit above the bottom-right map controls */
+@media (min-width: 900px) { #alert-btn { right: 16px; bottom: 132px; } }
+/* mobile: top-right, above the info "i" */
+@media (max-width: 899px) { #alert-btn { right: 12px; top: 12px; } }
+@media (max-width: 899px) { .maplibregl-ctrl-top-right { top: 62px; } }
+
+#alert-card {
+  position: fixed;
+  z-index: 12;
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(72vh, 620px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-top: 3px solid var(--danger);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-lg);
+  padding: 16px 16px 14px;
+}
+@media (min-width: 900px) { #alert-card { right: 16px; bottom: 132px; } }
+@media (max-width: 899px) { #alert-card { right: 12px; top: 62px; } }
+#alert-card .x {
+  position: absolute; top: 8px; right: 8px;
+  width: 28px; height: 28px; border: none; border-radius: 999px;
+  background: var(--surface-2); color: var(--ink-faint); font-size: 16px; cursor: pointer;
+}
+#alert-card h3 { margin: 0 0 10px; font-size: 15px; }
+#alert-card h4 { margin: 16px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); }
+#alert-card .ac-note { font-size: 11.5px; color: var(--ink-faint); line-height: 1.55; margin: 4px 0 8px; }
+#alert-card .ac-foot { font-size: 10.5px; color: var(--ink-ghost); line-height: 1.5; margin-top: 12px; border-top: 1px solid var(--hair); padding-top: 8px; }
+
+.ac-worst {
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, var(--hair));
+  border-radius: 10px; padding: 10px 12px;
+}
+.ac-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--danger); font-weight: 650; }
+.ac-worst-line { margin: 4px 0 8px; font-size: 13px; line-height: 1.45; }
+.ac-worst .btn { padding: 6px 10px; min-height: 32px; font-size: 12px; }
+
+.alert-list { display: flex; flex-direction: column; }
+.alert-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "date haz toll" "place place toll";
+  gap: 1px 8px;
+  width: 100%;
+  text-align: left;
+  background: none; border: none; border-bottom: 1px solid var(--hair);
+  padding: 8px 2px; cursor: pointer; font: inherit;
+}
+.alert-row:hover { background: var(--surface-2); }
+.ar-date { grid-area: date; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.ar-haz  { grid-area: haz; font-size: 12px; font-weight: 600; }
+.ar-place{ grid-area: place; font-size: 11.5px; color: var(--ink-dim); }
+.ar-toll { grid-area: toll; font-size: 12px; font-weight: 700; color: var(--danger); align-self: center; }
+
+.now-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.now-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid; }
+.now-chip.high { color: #b91c1c; border-color: currentColor; background: color-mix(in srgb, #dc2626 10%, #fff); }
+.now-chip.moderate { color: #b45309; border-color: currentColor; background: color-mix(in srgb, #f59e0b 12%, #fff); }
+#now-toggle { padding: 7px 12px; min-height: 34px; font-size: 12px; }

@@ -113,7 +113,22 @@
         source.</li>
     </ul>
 
-    <h2>8. Impact corridors</h2>
+    <h2>8. Alerts panel</h2>
+    <p>The red triangle by the map opens an <b>Alerts</b> panel. It is not a
+      real-time warning system — no open, machine-readable live hazard feed
+      exists for Nepal. It shows:</p>
+    <ul>
+      <li><b>Recorded, last 14 days</b> — the most recent BIPAD incidents.
+        These appear hours to days after an event and our copy refreshes weekly,
+        so "latest" means latest <i>recorded</i>, not latest <i>occurred</i>.</li>
+      <li><b>Elevated landslide hazard today</b> — the NASA LHASA daily nowcast
+        (rainfall-driven model, not observations), if it has been configured
+        with a free Earthdata token. Until then the panel says so.</li>
+    </ul>
+    <p>For official flood and weather warnings use Nepal's Department of
+      Hydrology and Meteorology.</p>
+
+    <h2>9. Impact corridors</h2>
     <p>Each significant event (any with recorded deaths, or a moderate-or-worse
       severity class) has an <b>impact view</b> showing a downstream corridor.
       There are two kinds, and the page always says which you are looking at:</p>
@@ -140,7 +155,7 @@
       units the path crosses — not a claim that each was affected by that event.
       Elevation profiles are sampled from SRTM 30&nbsp;m via OpenTopoData.</p>
 
-    <h2>9. Experimental layers</h2>
+    <h2>10. Experimental layers</h2>
     <p>The <a href="experimental.html">experimental section</a> is walled off and
       carries its own disclaimer. It contains: (D) a descriptive seasonal
       climatology from this dataset — <b>not a forecast</b>; (A) zonal summaries
@@ -149,7 +164,7 @@
       inventory paired with the historical record of its downstream river
       corridor. None of these predict a specific event.</p>
 
-    <h2>10. Getting the data</h2>
+    <h2>11. Getting the data</h2>
     <p>Everything the site loads is a static file under
       <code>data/processed/</code> — it doubles as an API:</p>
     <ul>
@@ -164,7 +179,7 @@
     <p>The map's download button exports whatever is currently filtered as CSV +
       GeoJSON. Per-district and per-event downloads are on those pages.</p>
 
-    <h2>11. Citation</h2>
+    <h2>12. Citation</h2>
     <pre class="cite">Nepal Water &amp; Slope Hazard Explorer (2026). Compiled hazard-event
 dataset for Nepal, 1971–present, from Nepal DRR/BIPAD and UNDRR DesInventar
 Sentinel, with administrative and population data from OCHA HDX.
