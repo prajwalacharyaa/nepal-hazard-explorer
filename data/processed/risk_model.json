@@ -1,0 +1,116 @@
+{
+ "generated": "2026-08-29",
+ "features": [
+  "hand",
+  "slope_deg",
+  "steep_near",
+  "relief_up",
+  "elev"
+ ],
+ "method": "Logistic regression on SRTM terrain features, positives = exactly-located recorded events, negatives = random points in Nepal with no event of that hazard within 5.0 km. Held-out AUC on a 30% split.",
+ "caveat": "Absence of a record is not absence of hazard, so this learns the terrain where events get RECORDED. Reporting is denser near roads and since 2011. Treat the coefficients as a cross-check on the hand-set gates, not as ground truth.",
+ "neg_clear_km": 5.0,
+ "seed": 20260829,
+ "models": {
+  "landslide": {
+   "auc": 0.783,
+   "n_positive": 500,
+   "n_negative": 500,
+   "mean": [
+    392.714,
+    26.338,
+    36.072,
+    370.477,
+    2040.017
+   ],
+   "scale": [
+    310.378,
+    14.204,
+    16.685,
+    245.063,
+    1664.65
+   ],
+   "coef": [
+    0.4684,
+    0.5098,
+    0.6999,
+    -0.0052,
+    -1.6923
+   ],
+   "intercept": -0.0805
+  },
+  "flood": {
+   "auc": 0.729,
+   "n_positive": 500,
+   "n_negative": 500,
+   "mean": [
+    335.901,
+    23.116,
+    32.038,
+    321.384,
+    1865.491
+   ],
+   "scale": [
+    306.799,
+    15.297,
+    18.495,
+    256.378,
+    1710.819
+   ],
+   "coef": [
+    0.573,
+    0.4607,
+    -0.8418,
+    -0.1007,
+    -0.9991
+   ],
+   "intercept": -0.0647
+  }
+ },
+ "terrain_summary": {
+  "landslide": {
+   "hand": {
+    "median_at_events": 415.0,
+    "median_elsewhere": 310.5
+   },
+   "slope_deg": {
+    "median_at_events": 28.9,
+    "median_elsewhere": 26.1
+   },
+   "steep_near": {
+    "median_at_events": 40.5,
+    "median_elsewhere": 39.6
+   },
+   "relief_up": {
+    "median_at_events": 378.0,
+    "median_elsewhere": 337.5
+   },
+   "elev": {
+    "median_at_events": 1441.0,
+    "median_elsewhere": 2290.0
+   }
+  },
+  "flood": {
+   "hand": {
+    "median_at_events": 172.0,
+    "median_elsewhere": 404.5
+   },
+   "slope_deg": {
+    "median_at_events": 23.0,
+    "median_elsewhere": 29.2
+   },
+   "steep_near": {
+    "median_at_events": 30.4,
+    "median_elsewhere": 42.4
+   },
+   "relief_up": {
+    "median_at_events": 220.5,
+    "median_elsewhere": 393.5
+   },
+   "elev": {
+    "median_at_events": 911.5,
+    "median_elsewhere": 2319.0
+   }
+  }
+ }
+}
