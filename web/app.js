@@ -875,11 +875,20 @@ function updateStats() {
   const missing = f.reduce((s, x) => s + (x.properties.missing || 0), 0);
   const exact = f.reduce((s, x) => s + (x.properties.geo_precision === "exact" ? 1 : 0), 0);
   const pct = f.length ? Math.round((exact / f.length) * 100) : 0;
+  const cell = (n, label, kind) =>
+    `<div class="stat ${kind}"><span class="stat-n">${fmt(n)}</span>` +
+    `<span class="stat-l">${label}</span></div>`;
   document.getElementById("stats").innerHTML =
-    `<div class="stat-row"><span class="big-num">${fmt(f.length)}</span> events` +
-    `<span>· <b>${fmt(deaths)}</b> deaths</span>` +
-    (missing ? `<span>· <b>${fmt(missing)}</b> missing</span>` : "") +
-    `</div><span class="sub">${state.yearMin}–${state.yearMax} · ${pct}% precisely located</span>`;
+    `<div class="stat-grid">` +
+      cell(f.length, "events", "is-events") +
+      cell(deaths, "deaths", "is-deaths") +
+      cell(missing, "missing", "is-missing") +
+    `</div>` +
+    `<div class="stat-foot">` +
+      `<span>${state.yearMin}–${state.yearMax}</span>` +
+      `<span class="dot-sep"></span>` +
+      `<span>${pct}% precisely located</span>` +
+    `</div>`;
 
   // surface the reset affordance only when something is actually filtered
   const filtered = state.hazards.size !== Object.keys(HAZARD_COLORS).length ||

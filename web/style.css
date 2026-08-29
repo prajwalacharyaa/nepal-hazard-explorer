@@ -30,6 +30,8 @@
   --warn-bg: #fffbeb;
   --warn-border: #fcd34d;
   --warn-ink: #78350f;
+  --warn-strong: #b45309;
+  --danger: #dc2626;
 
   /* legacy aliases (kept so older selectors keep resolving) */
   --panel: var(--surface);
@@ -560,22 +562,62 @@ select:focus, input:focus { border-color: var(--hair-strong); box-shadow: none; 
 
 /* --- stats readout ------------------------------------------------------ */
 .stats, #stats {
-  font-size: 12.5px;
-  color: var(--ink-dim);
-  line-height: 1.4;
-  padding: 10px 13px;
+  padding: 0;
   background: var(--surface-2);
   border: 1px solid var(--hair);
   border-radius: var(--r-ctl);
+  overflow: hidden;
+  /* an overflow!=visible flex item gets auto min-height:0, which let the column
+     flex squash this to nothing when the panel was tall — pin it */
+  flex: none;
 }
-.stats b, #stats b {
-  color: var(--ink);
-  font-weight: 650;
+#stats .stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+#stats .stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 9px 6px 8px;
+  text-align: center;
+}
+#stats .stat + .stat { border-left: 1px solid var(--hair); }
+#stats .stat-n {
+  font-size: 17px;
+  font-weight: 680;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  line-height: 1.15;
 }
-#stats .stat-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-#stats .big-num { font-size: 18px; font-weight: 680; letter-spacing: -0.02em; color: var(--ink); }
-#stats .sub { display: block; margin-top: 3px; font-size: 11px; color: var(--ink-faint); }
+#stats .stat-l {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+}
+#stats .is-events .stat-n { color: var(--ink); }
+#stats .is-deaths .stat-n { color: var(--danger); }
+#stats .is-missing .stat-n { color: var(--warn-strong); }
+#stats .is-deaths .stat-l { color: var(--danger); opacity: 0.8; }
+#stats .is-missing .stat-l { color: var(--warn-strong); opacity: 0.8; }
+#stats .stat-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--hair);
+  background: var(--surface);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+#stats .stat-foot .dot-sep {
+  width: 3px; height: 3px; border-radius: 999px;
+  background: var(--ink-ghost);
+}
 
 /* --- legend ------------------------------------------------------------- */
 #legend .row {
