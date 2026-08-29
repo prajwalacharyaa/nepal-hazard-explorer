@@ -155,7 +155,7 @@ Four things, in order:
    raises a floor for a few weeks, then decays and expires by itself.
 
 Every number shown says where it came from. Details and limitations:
-[web/methodology.html](web/methodology.html).
+[methodology.html](methodology.html).
 
 ---
 
@@ -176,7 +176,8 @@ pipeline/          Python. Each script does one thing and writes JSON/GeoJSON.
   calibrate.py       back-tests the terrain gates
   checks.py          data sanity assertions, runs in CI
 
-web/               Static frontend. No build step.
+*.html *.js        Static frontend at the repo root, so the site is served
+style.css          from / with no redirect. No build step.
   index.html/app.js    the map, filters, area cards, risk analysis
   common.js            design tokens, shared helpers, window.NHM
   impact.html/.js      one event: corridor, flow animation, downstream units
@@ -197,14 +198,14 @@ data/processed/    Committed. This is what the site loads, and it doubles as
 ```bash
 git clone https://github.com/<you>/nepal-hazard-explorer.git
 cd nepal-hazard-explorer
-python serve.py            # http://localhost:8000/web/
+python serve.py            # http://localhost:8000/
 ```
 
 `data/processed/` is committed, so this works immediately with no pipeline run.
 
-It must be served over HTTP from the repo root — `web/` reaches `../data/`, and
-opening `index.html` from the filesystem gives a blank map because the browser
-blocks `file://` reads.
+It has to be served over HTTP. Opening `index.html` from the filesystem gives a
+blank map, because the browser blocks a `file://` page from reading `data/`
+alongside it.
 
 ### Rebuilding the data
 

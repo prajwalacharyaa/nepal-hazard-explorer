@@ -3,9 +3,8 @@
 
     python serve.py
 
-Always serves the PROJECT ROOT (so web/ can reach ../data/processed) and opens
-the map in your browser. Opening web/index.html by double-clicking will not
-work — the browser blocks a file:// page from reading the data.
+Serves the project root and opens the map. Double-clicking index.html will not
+work: the browser blocks a file:// page from reading the data alongside it.
 """
 from __future__ import annotations
 
@@ -46,7 +45,7 @@ def main():
         print("! data/processed/events.geojson is missing — the map will show an error.")
         print("  Build it first:  cd pipeline && python clean_merge.py && python aggregate.py\n")
 
-    url = f"http://localhost:{args.port}/web/"
+    url = f"http://localhost:{args.port}/"
     socketserver.TCPServer.allow_reuse_address = True
     try:
         with socketserver.TCPServer(("127.0.0.1", args.port), Handler) as httpd:

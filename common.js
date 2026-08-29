@@ -1,7 +1,7 @@
 /* Shared constants + helpers for all pages. Loaded as a plain script; exposes
    globals under window.NHM. */
 (function () {
-  const DATA = "../data/processed";
+  const DATA = "data/processed";
 
   /* Hazard colours. Categorical, so they only have to be told apart from each
      other — but each also clears 4.5:1 on the bone background because they are
@@ -89,23 +89,14 @@
   const slugify = (s) =>
     String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-  /* Fetch JSON. The pages live in web/ and the data in ../data/processed, but
-     people also serve the repo with web/ as the document root — so if the
-     relative path 404s, retry once against a root-relative path before giving
-     up. Any real failure is reported by fatalError() with a fix. */
+  /* Fetch JSON. Failures are reported by fatalError() with a fix, because the
+     usual cause is opening the files over file:// instead of serving them. */
   async function loadJSON(url) {
     let r;
     try {
       r = await fetch(url);
     } catch (e) {
       throw new Error(`network|${url}|${e.message}`);
-    }
-    if (!r.ok && url.startsWith("../")) {
-      const alt = url.replace(/^\.\.\//, "");
-      try {
-        const r2 = await fetch(alt);
-        if (r2.ok) return r2.json();
-      } catch (e) { /* fall through to the original failure */ }
     }
     if (!r.ok) throw new Error(`http ${r.status}|${url}`);
     return r.json();

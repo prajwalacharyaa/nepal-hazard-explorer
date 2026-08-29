@@ -10,7 +10,7 @@ running. Should take about ten minutes.
 **Suggested name:** `nepal-hazard-explorer`
 
 Short, says what it is, and reads well in the Pages URL
-(`<you>.github.io/nepal-hazard-explorer/web/`). Alternatives if it's taken:
+(`<you>.github.io/nepal-hazard-explorer/`). Alternatives if it's taken:
 `nepal-hazard-map`, `npl-hazard-explorer`.
 
 **Description** (paste into the About box):
@@ -78,15 +78,12 @@ git check-ignore .env && echo "ignored, good"
 Wait a minute, then open:
 
 ```
-https://<you>.github.io/nepal-hazard-explorer/web/
+https://<you>.github.io/nepal-hazard-explorer/
 ```
 
-Note the `/web/` — the site root is the repo root so that `web/` can reach
-`../data/`. `.nojekyll` is already committed, which is what stops Jekyll
-mangling the data directory.
-
-**Optional:** to serve from the bare domain instead, add a one-line
-`index.html` at the repo root that redirects to `web/`.
+The frontend lives at the repo root, so that URL *is* the site — no `/web/`, no
+redirect. `.nojekyll` is already committed, which is what stops Jekyll from
+skipping the data directory.
 
 ---
 
@@ -144,7 +141,7 @@ workflow**.
 ## 7. Verify
 
 ```bash
-curl -sI https://<you>.github.io/nepal-hazard-explorer/web/ | head -1
+curl -sI https://<you>.github.io/nepal-hazard-explorer/ | head -1
 curl -s  https://<you>.github.io/nepal-hazard-explorer/data/processed/meta.json
 ```
 
@@ -164,7 +161,7 @@ Geolocation needs HTTPS, which Pages gives you. It won't work over plain HTTP.
 Nothing is GitHub-specific except the workflows. It's static files.
 
 **Netlify / Vercel / Cloudflare Pages** — point at the repo, no build command,
-publish directory `.` (the repo root, not `web/`). You lose the scheduled jobs
+publish directory `.` (the repo root). You lose the scheduled jobs
 unless you recreate them as scheduled functions.
 
 **Any web server:**
@@ -182,16 +179,15 @@ Then run the pipeline from cron:
 0  5 * * 1  cd /srv/nepal-hazard-explorer/pipeline && ./weekly.sh
 ```
 
-The only hard requirements are that `web/` can reach `../data/processed/` over
-HTTP, and that it's served over HTTPS if you want the location features.
+The only hard requirements are that `index.html` and `data/processed/` are
+served from the same origin, and HTTPS if you want the location features.
 
 ---
 
 ## Troubleshooting
 
-**Blank map, console shows 404s for `../data/processed/…`**
-Served from inside `web/` instead of the repo root. Pages folder must be
-`/ (root)`.
+**Blank map, console shows 404s for `data/processed/…`**
+Pages is serving a subdirectory. The folder setting must be `/ (root)`.
 
 **Data files 404 but HTML loads**
 `.nojekyll` missing — Jekyll skips directories it doesn't recognise. It's
