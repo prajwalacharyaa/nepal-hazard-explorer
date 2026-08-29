@@ -928,6 +928,24 @@ map.on("mouseleave", "heat-points", () => (map.getCanvas().style.cursor = ""));
    ========================================================================= */
 const RECENT_DAYS = 14;
 const RAIN_WET_MM = 100;               // window max mm that counts as "wet" for the badge
+const RAIN_STOPS = [[0, "#eef3f7"], [15, "#e0f2fe"], [50, "#bae6fd"],
+                    [100, "#7dd3fc"], [150, "#38bdf8"], [220, "#0284c7"]];
+function rainColor(mm) {
+  let c = RAIN_STOPS[0][1];
+  for (const [t, col] of RAIN_STOPS) if (mm >= t) c = col;
+  return c;
+}
+function flyToDistrict(name) {
+  const f = (state.data.districts?.features || [])
+    .find((x) => x.properties.district === name);
+  if (!f) return;
+  try {
+    const [w, s, e, n] = turf.bbox(f);
+    map.fitBounds([[w, s], [e, n]], { padding: 56, maxZoom: 10, duration: 900 });
+  } catch (err) { return; }
+  collapsePanel();
+  openAreaCard(name);
+}
 let RAIN = null;
 let alertBuilt = false;
 
@@ -1000,12 +1018,19 @@ function toggleAlertCard(rec, worst) {
     rainSec = `<h4>Rainfall, last ${RAIN.window_days} day${RAIN.window_days === 1 ? "" : "s"}
         <span class="muted">to ${RAIN.as_of}</span></h4>
       <p class="ac-note">${RAIN.source}. Recent rain is the main trigger for
-        landslides and flash floods — this is not a hazard forecast.</p>
-      <div class="now-chips">${list.map((n) => {
-        const r = RAIN.districts[n];
-        const lvl = r.mm_win_max >= 150 ? "high" : r.mm_win_max >= RAIN_WET_MM ? "moderate" : "";
-        return `<span class="now-chip ${lvl}">${n} <b>${Math.round(r.mm_win_max)}mm</b></span>`;
-      }).join("") || "<span class='ac-note'>Nothing notable.</span>"}</div>
+        landslides and flash floods — not a hazard forecast.</p>
+      <div class="rain-list">${list.map((n) => {
+        const mm = Math.round(RAIN.districts[n].mm_win_max);
+        return `<button class="rain-row" data-d="${n}" title="Zoom to ${n}">
+          <span class="rr-sw" style="background:${rainColor(mm)}"></span>
+          <span class="rr-name">${n}</span>
+          <span class="rr-mm">${mm}<i>mm</i></span>
+        </button>`;
+      }).join("") || "<p class='ac-note'>Nothing notable.</p>"}</div>
+      <div class="rain-legend">${RAIN_STOPS.slice(1).map(([t], i) => {
+        const last = i === RAIN_STOPS.length - 2;
+        return `<span><i style="background:${RAIN_STOPS[i + 1][1]}"></i>${t}${last ? "+" : ""}</span>`;
+      }).join("")}<span class="rl-unit">mm · ${RAIN.window_days}d peak</span></div>
       <button id="rain-toggle" class="btn">Show on map</button>`;
   } else {
     rainSec = `<h4>Recent rainfall</h4>
@@ -1046,6 +1071,7 @@ function toggleAlertCard(rec, worst) {
     if (d) { openAreaCard(d); }
   };
   card.querySelectorAll(".ac-fly, .alert-row").forEach((el) => (el.onclick = () => fly(el)));
+  card.querySelectorAll(".rain-row").forEach((el) => (el.onclick = () => flyToDistrict(el.dataset.d)));
 
   const rt = document.getElementById("rain-toggle");
   if (rt) rt.onclick = () => toggleRainLayer(rt);
@@ -1066,9 +1092,8 @@ function toggleRainLayer(btn) {
   const pick = ["match", ["get", "district"]];
   names.forEach((n, i) => pick.push(n, mm[i]));
   pick.push(0);
-  const fillColor = ["interpolate", ["linear"], pick,
-    0, "rgba(0,0,0,0)", 15, "#e0f2fe", 50, "#bae6fd",
-    100, "#7dd3fc", 150, "#38bdf8", 220, "#0284c7"];
+  const fillColor = ["step", pick, "rgba(0,0,0,0)",
+    15, "#e0f2fe", 50, "#bae6fd", 100, "#7dd3fc", 150, "#38bdf8", 220, "#0284c7"];
   map.addSource("rain", { type: "geojson", data: state.data.districts });
   map.addLayer({ id: "rain-fill", type: "fill", source: "rain",
     paint: { "fill-color": fillColor, "fill-opacity": 0.45 } });
