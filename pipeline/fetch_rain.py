@@ -68,8 +68,11 @@ def fetch_day(sess, d):
         except requests.RequestException as e:
             print(f"  ! {d} {e.__class__.__name__}", file=sys.stderr)
             return None
-        if r.status_code == 200 and r.content[:8]:
+        if r.status_code == 200 and r.content[:4].hex() == "89484446":
             return r.content
+        if r.status_code == 200:
+            # 200 but not HDF5 - usually a "not yet available" HTML stub
+            continue
         if r.status_code == 403 and b"EULA" in r.content:
             print("  ! 403 EULA — accept 'NASA GESDISC DATA ARCHIVE' at "
                   "https://urs.earthdata.nasa.gov/profile", file=sys.stderr)
