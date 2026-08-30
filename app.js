@@ -506,6 +506,9 @@ function renderAreaCard({ title, subtitle, slug, feats, allTime, at }) {
       ${fullView}
     </div>`;
   card.hidden = false;
+  // Phones have no room for both popovers; the alert card is anchored top and
+  // this one bottom, and they meet in the middle on a short screen.
+  if (isMobile()) hideAlertCard();
   // only steal focus / collapse the sheet when the card first appears, not on
   // every filter-driven refresh
   if (firstOpen && typeof collapsePanel === "function") collapsePanel();
@@ -1097,10 +1100,18 @@ async function initAlerts() {
   btn.onclick = () => toggleAlertCard(rec, worst);
 }
 
+function hideAlertCard() {
+  const card = document.getElementById("alert-card");
+  if (!card || card.hidden) return;
+  card.hidden = true;
+  document.getElementById("alert-btn").setAttribute("aria-expanded", "false");
+}
+
 function toggleAlertCard(rec, worst) {
   const card = document.getElementById("alert-card");
   const btn = document.getElementById("alert-btn");
-  if (!card.hidden) { card.hidden = true; btn.setAttribute("aria-expanded", "false"); return; }
+  if (!card.hidden) { hideAlertCard(); return; }
+  if (isMobile()) closeAreaCard();
 
   const row = (f) => {
     const p = f.properties;
