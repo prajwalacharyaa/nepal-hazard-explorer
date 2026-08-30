@@ -269,7 +269,7 @@ def load_desinventar() -> list[dict]:
             houses_destroyed=to_int(g(el, "vivdest")),
             houses_damaged=to_int(g(el, "vivafec")),
             title=f"{raw_evt.title()} - {village or district or 'Nepal'}",
-            source_url=f"https://www.desinventar.net/DesInventar/profiletab.jsp?countrycode=npl&serial={g('serial')}",
+            source_url=f"https://www.desinventar.net/DesInventar/profiletab.jsp?countrycode=npl&serial={g(el, 'serial')}",
         )
         # geo codes for centroid resolution downstream (stripped after aggregate)
         row["_lvl1"] = g(el, "level1")

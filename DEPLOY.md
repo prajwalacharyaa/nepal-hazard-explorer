@@ -148,7 +148,7 @@ curl -s  https://<you>.github.io/nepal-hazard-explorer/data/processed/meta.json
 In the browser:
 
 - Map draws, heat layer visible
-- Hazard pills show counts (Landslide 7,340 / Flood 5,490 / Avalanche 156)
+- Hazard pills show counts (Landslide 7,357 / Flood 5,497 / Avalanche 156)
 - Click a district → area card with an **Analyse** button
 - Analyse → allow location → the risk modal runs and the mini-map draws
 
