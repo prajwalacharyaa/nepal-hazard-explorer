@@ -196,7 +196,7 @@ data/processed/    Committed. This is what the site loads, and it doubles as
 ## Running it
 
 ```bash
-git clone https://github.com/<you>/nepal-hazard-explorer.git
+git clone https://github.com/prajwalacharyaa/nepal-hazard-explorer.git
 cd nepal-hazard-explorer
 python serve.py            # http://localhost:8000/
 ```
