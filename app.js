@@ -68,7 +68,7 @@ map.on("idle", collapseAttribution);
    genuinely never finishes loading. */
 let mapReady = false;
 const markReady = () => { mapReady = true; };
-map.on("load", () => { markReady(); simplifyBasemap(map); });
+map.on("load", () => { markReady(); simplifyBasemap(map, { detail: true }); });
 map.on("idle", markReady);
 map.on("sourcedata", (e) => { if (e.isSourceLoaded) markReady(); });
 map.on("error", (e) => {
@@ -639,8 +639,74 @@ function initYearSliders() {
   mn.oninput = sync; mx.oninput = sync;
   document.getElementById("year-label").textContent = `${state.yearMin}–${state.yearMax}`;
 }
-/* ---- place search: districts + municipalities, fuzzy-ish prefix match ---- */
+/* ---- place search ---------------------------------------------------------
+   Local list (77 districts + 753 municipalities) matches instantly. Anything
+   finer — towns, villages, wards, landmarks — comes from OpenStreetMap's
+   Nominatim geocoder, restricted to Nepal, debounced so it stays well inside
+   the 1 req/s usage policy. Local hits open the district page; a geocoded
+   point flies the map there and opens its area card. ---------------------- */
 let PLACES = [];
+let searchPin = null;
+const geoCache = new Map();
+
+function flyToPlace(p) {
+  const c = [p.lon, p.lat];
+  if (!searchPin) {
+    searchPin = new maplibregl.Marker({ color: THEME.accent }).setLngLat(c).addTo(map);
+  } else {
+    searchPin.setLngLat(c);
+  }
+  map.flyTo({ center: c, zoom: p.zoom || 13, duration: 900 });
+  if (typeof collapsePanel === "function") collapsePanel();
+  const d = districtAt(c);
+  if (d) openAreaCard(d, { lng: c[0], lat: c[1] });
+}
+
+async function geocodeNepal(q) {
+  const key = q.trim().toLowerCase();
+  if (key.length < 3) return [];
+  if (geoCache.has(key)) return geoCache.get(key);
+  const url = "https://nominatim.openstreetmap.org/search?" + new URLSearchParams({
+    q, countrycodes: "np", format: "jsonv2", limit: "6",
+    addressdetails: "1", "accept-language": "en",
+  });
+  let rows = [];
+  try {
+    const r = await fetch(url, { headers: { Accept: "application/json" } });
+    if (r.ok) {
+      const j = await r.json();
+      rows = j.map((x) => {
+        const a = x.address || {};
+        const near = a.city || a.town || a.village || a.municipality ||
+          a.county || a.state_district || "";
+        const parts = [near, a.state].filter(Boolean);
+        const label = (x.name || x.display_name.split(",")[0]).trim();
+        return {
+          name: label,
+          kind: prettyPlaceType(x.type || x.addresstype),
+          detail: parts.filter((v) => v && v !== label).join(", "),
+          lon: +x.lon, lat: +x.lat,
+        };
+      }).filter((x) => x.name && Number.isFinite(x.lon));
+    }
+  } catch (e) { /* offline or rate-limited: local results still work */ }
+  geoCache.set(key, rows);
+  return rows;
+}
+
+function prettyPlaceType(t) {
+  const m = {
+    city: "City", town: "Town", village: "Village", hamlet: "Hamlet",
+    suburb: "Neighbourhood", neighbourhood: "Neighbourhood", quarter: "Neighbourhood",
+    administrative: "Area", municipality: "Municipality",
+    peak: "Peak", mountain: "Peak", river: "River", stream: "Stream",
+    lake: "Lake", water: "Water", glacier: "Glacier",
+    attraction: "Landmark", viewpoint: "Viewpoint", hotel: "Hotel",
+    guest_house: "Guest house", hostel: "Hostel", camp_site: "Campsite",
+    school: "School", hospital: "Hospital", place_of_worship: "Temple",
+  };
+  return m[t] || "Place";
+}
 function buildPlaceIndex() {
   const seen = new Set();
   const out = [];
@@ -681,7 +747,7 @@ function initPlaceSearch() {
   const input = document.getElementById("place-search");
   const list = document.getElementById("place-results");
   if (!input) return;
-  let results = [], active = -1;
+  let results = [], active = -1, geoTimer = null, seq = 0;
 
   const close = () => {
     list.hidden = true; list.innerHTML = ""; active = -1;
@@ -689,15 +755,22 @@ function initPlaceSearch() {
   };
   const go = (p) => {
     close();
+    if (p.lon != null) { flyToPlace(p); input.blur(); return; }
     location.href = `district.html?d=${encodeURIComponent(slugify(p.district))}${filterQuery()}`;
   };
-  const paint = () => {
-    list.innerHTML = results.length
-      ? results.map((p, i) =>
-          `<button type="button" role="option" aria-selected="${i === active}" data-i="${i}">
-             <span>${p.name}</span><span class="kind">${p.kind}</span>
-           </button>`).join("")
-      : '<div class="none">No matching district or municipality.</div>';
+  const paint = (loading) => {
+    if (!results.length) {
+      list.innerHTML = loading
+        ? '<div class="none">Searching…</div>'
+        : '<div class="none">Nothing found for that.</div>';
+    } else {
+      list.innerHTML = results.map((p, i) =>
+        `<button type="button" role="option" aria-selected="${i === active}" data-i="${i}">
+           <span class="pl-name">${p.name}${p.detail ? ` <em>${p.detail}</em>` : ""}</span>
+           <span class="kind">${p.kind}</span>
+         </button>`).join("") +
+        (loading ? '<div class="none">Searching the map…</div>' : "");
+    }
     list.hidden = false;
     input.setAttribute("aria-expanded", "true");
     list.querySelectorAll("button").forEach((b) => {
@@ -706,10 +779,20 @@ function initPlaceSearch() {
   };
 
   input.oninput = () => {
-    results = searchPlaces(input.value);
+    const q = input.value;
     active = -1;
-    if (!input.value.trim()) return close();
-    paint();
+    clearTimeout(geoTimer);
+    if (!q.trim()) return close();
+    results = searchPlaces(q);
+    paint(q.trim().length >= 3);
+    const mine = ++seq;
+    geoTimer = setTimeout(async () => {
+      const geo = await geocodeNepal(q);
+      if (mine !== seq || input.value !== q) return;      // superseded
+      const localKeys = new Set(results.map((r) => r.name.toLowerCase()));
+      results = results.concat(geo.filter((g) => !localKeys.has(g.name.toLowerCase())));
+      paint(false);
+    }, 350);
   };
   input.onkeydown = (e) => {
     if (e.key === "Escape") return close();

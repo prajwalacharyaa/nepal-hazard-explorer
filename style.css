@@ -429,6 +429,11 @@ select:focus, input:focus { border-color: var(--hair-strong); box-shadow: none; 
 }
 .combo-list button:hover, .combo-list button[aria-selected="true"] { background: var(--surface-2); }
 .combo-list .kind { font-size: 11px; color: var(--ink-ghost); flex: none; }
+.combo-list .pl-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo-list .pl-name em { font-style: normal; color: var(--ink-faint); font-size: 12px; }
+.combo-list .none:last-child:not(:first-child) {
+  font-size: 11px; color: var(--ink-ghost); padding: 6px 10px 4px;
+}
 .combo-list .none { padding: 10px; font-size: 13px; color: var(--ink-faint); }
 
 /* --- segmented control -------------------------------------------------- */

@@ -176,7 +176,12 @@
      the subject rather than one country among several.
      Call once, after the style has loaded.
      --------------------------------------------------------------------- */
+  // Full de-clutter: everything that competes with the hazard layers at the
+  // country/region zooms the analysis pages use.
   const CLUTTER = /road|street|bridge|tunnel|motorway|highway|transit|railway|rail|aeroway|airport|poi|place_of|building|housenum|ferry|pier|path|track|cycle/i;
+  // Light de-clutter for the main map, where roads, buildings and paths are
+  // wanted for orientation. Only pure noise goes.
+  const CLUTTER_MIN = /transit|aeroway|airport|poi|place_of|housenum|ferry|pier/i;
   // settlement labels worth keeping, even though they match nothing above
   const KEEP_LABEL = /country|state|continent|city|town|village|place|water_name|waterway_name/i;
 
@@ -208,18 +213,26 @@
     }
   }
 
+  /* opts:
+       detail        keep roads/buildings/paths, only strip pure noise, and
+                     always turn on the dense settlement labels
+       denseLabels   lower the label zoom thresholds (implied by detail)
+       roadNames     keep road name / shield layers (implied by detail)
+       mask          fade the world outside Nepal (default on)
+       foreignLabels leave neighbouring names visible (default off) */
   function simplifyBasemap(map, opts = {}) {
+    const noise = opts.detail ? CLUTTER_MIN : CLUTTER;
+    const keepRoadNames = opts.roadNames || opts.detail;
     const layers = (map.getStyle() && map.getStyle().layers) || [];
     for (const l of layers) {
       const id = l.id || "";
       if (KEEP_LABEL.test(id)) continue;
-      // road *names* help you place yourself; road casings are the clutter
-      if (opts.roadNames && /^highway-name|road_shield|highway-shield/.test(id)) continue;
-      if (CLUTTER.test(id)) {
+      if (keepRoadNames && /^highway-name|road_shield|highway-shield/.test(id)) continue;
+      if (noise.test(id)) {
         try { map.setLayoutProperty(id, "visibility", "none"); } catch (e) { /* not ours */ }
       }
     }
-    if (opts.denseLabels) denseLabels(map);
+    if (opts.denseLabels || opts.detail) denseLabels(map);
     if (opts.mask !== false) addNepalMask(map);
     if (opts.foreignLabels !== true) hideForeignLabels(map);
   }
