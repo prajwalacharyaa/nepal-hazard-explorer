@@ -2,7 +2,7 @@
   "_note": "Documented reach lengths for major events. We do NOT hand-draw river courses — that invites error. Instead we record the source location (from the event record) and the downstream distance reported in the literature, then route the line along the mapped HydroRIVERS network. So the COURSE is the real river and the LENGTH is documented, rather than either being invented.",
   "manual-2026-08-26-langtang": {
     "trace_km": 100,
-    "note": "Documented reach: several million m³ of ice and rock detached near 5,000 m in the Langtang area, fell ~1,900 m and briefly dammed the Bhote Koshi; the breach sent a debris flow and flash flood roughly 100 km down the Bhote Koshi and Trishuli. Cross-border impact was also reported at Gyirong in China, which is upstream of the Nepal reach and is not drawn here. The 100 km length is from reporting; the course shown follows the mapped river network.",
-    "reference": "USGS, 2026 Nepal Debris Avalanche and Flash Flood; UN OCHA situation reports, Aug 2026"
+    "note": "Documented reach: several million m3 of ice and rock detached near 5,000 m above Langtang, fell ~1,900 m and blocked the Lhende river near the Nepal-China border, impounding a short-lived debris lake. The blockage failed and sent a debris flow and flash flood roughly 100 km down the Bhote Koshi and Trishuli, through Rasuwa into Nuwakot and Dhading. Cross-border impact was also reported at Gyirong in China, which is upstream of the Nepal reach and is not drawn here. The 100 km length is from reporting; the course shown follows the mapped river network.",
+    "reference": "USGS, 2026 Nepal Debris Avalanche and Flash Flood; Nepal NDRRMA situation reports; UN OCHA, Aug-Sep 2026"
   }
 }
