@@ -1,6 +1,6 @@
 {
- "generated": "2026-09-03",
- "reference_date": "2026-09-03",
+ "generated": "2026-09-04",
+ "reference_date": "2026-09-04",
  "note": "Areas recently hit hard enough to stay at raised risk while they recover: saturated ground, blocked or re-routed channels, debris still perched upslope, damaged infrastructure. Derived from the recorded event feed and self-expiring — the frontend re-checks every alert against the viewer's own clock, so a stale build simply shows nothing rather than something wrong.",
  "min_severity": 25.0,
  "stages": [
@@ -52,7 +52,7 @@
    "event_date": "2026-08-26",
    "deaths": 489,
    "missing": 1500,
-   "days_since": 8,
+   "days_since": 9,
    "expires": "2026-10-10",
    "stage_ends": "2026-09-16",
    "source": "derived from the recorded event feed"
@@ -69,7 +69,7 @@
    "event_date": "2026-08-12",
    "deaths": 5,
    "missing": 1,
-   "days_since": 22,
+   "days_since": 23,
    "expires": "2026-09-26",
    "stage_ends": "2026-09-26",
    "source": "derived from the recorded event feed"
