@@ -1,5 +1,5 @@
 {
- "generated": "2026-09-02",
+ "generated": "2026-09-05",
  "note": "Observed climate context for Nepal. Everything here is an observation or simple arithmetic on one. Nothing is projected forward, and none of it predicts a specific event.",
  "warming": {
   "source": "NASA GISTEMP v4, 250 km land analysis (GHCNv4)",
@@ -123,7 +123,7 @@
    },
    {
     "decade": 2020,
-    "events": 4447,
+    "events": 4471,
     "melt_linked": 26,
     "share_pct": 0.6
    }

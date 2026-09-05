@@ -4,7 +4,7 @@ Every landslide, flood and avalanche recorded in Nepal since 1971 on one map,
 plus a terrain-aware check that answers a narrower question: **is the specific
 spot I'm standing on exposed?**
 
-13,040 events. 11,562 dead, 6,602 missing. No API keys, no build step, no
+13,064 events. 11,612 dead, 6,602 missing. No API keys, no build step, no
 server — the whole thing is static files on GitHub Pages.
 
 **Not a warning system.** For official alerts use Nepal's
@@ -37,10 +37,10 @@ Same district. Same rainfall. Same records within 5 km.
 
 | | |
 |---|---|
-| Events | 13,040 (1971 – present) |
-| Deaths / missing | 11,562 / 6,602 |
-| Sources | BIPAD 6,736 · DesInventar 6,333 · curated 1 |
-| Exactly located | 6,736 (52%) — the rest sit on a village or district centroid |
+| Events | 13,064 (1971 – present) |
+| Deaths / missing | 11,612 / 6,602 |
+| Sources | BIPAD 6,760 · DesInventar 6,333 · curated 1 |
+| Exactly located | 6,760 (52%) — the rest sit on a village or district centroid |
 | Districts / municipalities | 77 / 753 |
 | Downstream corridors traced | 4,617 |
 | Routed release paths | 613 (164 glacial lakes, 449 dams/weirs/hydropower) |
@@ -49,7 +49,7 @@ Same district. Same rainfall. Same records within 5 km.
 ### Findings worth knowing before you use it
 
 **The record only contains three hazard types.** The schema has seven. BIPAD and
-DesInventar between them emit `landslide` (7,377), `flood` (5,506) and
+DesInventar between them emit `landslide` (7,396), `flood` (5,511) and
 `avalanche` (156) and nothing else — every GLOF, debris flow and flash flood in
 Nepal's history is filed under "flood" or "landslide". The one `flash_flood` row
 is a curated entry for the 2026 Langtang cascade. The UI now only shows filters
