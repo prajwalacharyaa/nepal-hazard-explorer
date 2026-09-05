@@ -378,7 +378,9 @@ async function ensurePalikaLayer() {
 map.on("zoomend", () => { if (map.getZoom() >= 7.8) ensurePalikaLayer(); });
 
 function openPalikaCard(pcode, name, lngLat) {
-  state.openArea = { kind: "palika", pcode, name, at: anLngLat(lngLat) };
+  const at = anLngLat(lngLat);
+  setSearchPin(at);
+  state.openArea = { kind: "palika", pcode, name, at };
   renderOpenArea();
 }
 
@@ -392,8 +394,23 @@ function anLngLat(l) {
 
 /* ------------------------------------------------------------ area card --- */
 function openAreaCard(district, lngLat) {
-  state.openArea = { kind: "district", district, at: anLngLat(lngLat) };
+  const at = anLngLat(lngLat);
+  setSearchPin(at);
+  state.openArea = { kind: "district", district, at };
   renderOpenArea();
+}
+
+/* The one pin on the map: wherever the open card actually points to — a map
+   click, a search result, an alert row. Cleared when an action has no single
+   point of its own (fitting to a whole district), so it never sits stale
+   somewhere unrelated to what is on screen. */
+function setSearchPin(lngLat) {
+  if (!lngLat) {
+    if (searchPin) { searchPin.remove(); searchPin = null; }
+    return;
+  }
+  if (!searchPin) searchPin = new maplibregl.Marker({ color: THEME.accent }).setLngLat(lngLat).addTo(map);
+  else searchPin.setLngLat(lngLat);
 }
 
 /* Rebuild whatever area card is open against the CURRENT filters. Called both
@@ -651,15 +668,10 @@ const geoCache = new Map();
 
 function flyToPlace(p) {
   const c = [p.lon, p.lat];
-  if (!searchPin) {
-    searchPin = new maplibregl.Marker({ color: THEME.accent }).setLngLat(c).addTo(map);
-  } else {
-    searchPin.setLngLat(c);
-  }
   map.flyTo({ center: c, zoom: p.zoom || 13, duration: 900 });
   if (typeof collapsePanel === "function") collapsePanel();
   const d = districtAt(c);
-  if (d) openAreaCard(d, { lng: c[0], lat: c[1] });
+  if (d) openAreaCard(d, c); else setSearchPin(c);
 }
 
 async function geocodeNepal(q) {
@@ -1270,7 +1282,7 @@ function toggleAlertCard(rec, worst) {
     collapsePanel();
     if (el.dataset.id && el.dataset.id.startsWith("desinventar")) return;
     const d = districtAt([lon, lat]);
-    if (d) { openAreaCard(d); }
+    if (d) openAreaCard(d, [lon, lat]); else setSearchPin([lon, lat]);
   };
   card.querySelectorAll(".ac-fly, .alert-row").forEach((el) => (el.onclick = () => fly(el)));
   card.querySelectorAll(".rain-row").forEach((el) => (el.onclick = () => flyToDistrict(el.dataset.d)));
