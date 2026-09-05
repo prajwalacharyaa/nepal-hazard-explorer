@@ -125,13 +125,22 @@ No other secrets. Nothing else in the project needs a key.
 | Workflow | Schedule | Does |
 |---|---|---|
 | `checks.yml` | every push / PR | data sanity assertions |
-| `daily.yml` | 07:40 UTC daily | IMERG rainfall + refresh active alerts |
-| `refresh.yml` | Mondays 05:00 UTC | re-fetch BIPAD, rebuild the dataset |
+| `daily.yml` | 07:40 UTC daily | re-fetch BIPAD, rebuild the dataset, IMERG rain, refresh active alerts |
 
-`active_alerts.json` needs the daily run: alerts step down high → elevated →
-watch and then expire, so they go stale by the clock even when nothing new
-happens. The rainfall step is `continue-on-error`, so a missing token can't
-freeze the alerts — you get a workflow warning instead.
+One workflow now covers all of it. BIPAD used to be pulled weekly; it runs
+daily so a landslide or flood logged today shows up today, not the following
+Monday. `active_alerts.json` needs the daily run regardless: alerts step down
+high → elevated → watch and then expire, so they go stale by the clock even
+when nothing new happens. The rainfall step is `continue-on-error`, so a
+missing token can't block the rest of the refresh — you get a workflow
+warning instead.
+
+Two things it deliberately does not do: retrace downstream corridors for a
+newly significant event (needs the 79 MB HydroRIVERS network, not incremental
+— run `corridors.py` by hand when one occurs), and update the precise toll on
+a major named disaster (data/raw/manual_events.csv stays hand-maintained from
+NDRRMA/Nepal Police reporting — see the README's "Findings" section on how
+that's protected from being overwritten by an automated duplicate).
 
 Kick one off by hand to check it works: **Actions → Daily refresh → Run
 workflow**.
@@ -174,9 +183,7 @@ location / { try_files $uri $uri/ =404; }
 Then run the pipeline from cron:
 
 ```cron
-40 7 * * *  cd /srv/nepal-hazard-explorer/pipeline && python active_alerts.py
-50 7 * * *  cd /srv/nepal-hazard-explorer/pipeline && python fetch_rain.py
-0  5 * * 1  cd /srv/nepal-hazard-explorer/pipeline && ./weekly.sh
+40 7 * * *  cd /srv/nepal-hazard-explorer/pipeline && python fetch_bipad.py               && python clean_merge.py && python aggregate.py               && python outlook.py && python glof.py               && python fetch_rain.py && python active_alerts.py
 ```
 
 The only hard requirements are that `index.html` and `data/processed/` are

@@ -106,7 +106,7 @@ Deliberately boring. Nothing here needs a bundler, a framework or a paid tier.
 | scikit-learn | the risk-model back-test (optional) |
 | requests | every fetch |
 
-**Hosting** — GitHub Pages, GitHub Actions for the daily and weekly refresh.
+**Hosting** — GitHub Pages, one daily GitHub Action for the full refresh.
 
 ### Data sources
 

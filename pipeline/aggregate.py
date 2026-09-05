@@ -135,9 +135,16 @@ def _haversine(a, b):
     return 2 * r * math.asin(math.sqrt(h))
 
 
+LOSS_FIELDS = ("deaths", "missing", "injured", "people_affected",
+              "houses_destroyed", "houses_damaged", "severity_score", "severity_class")
+
+
 def _richness(p):
-    return sum(1 for k in ("deaths", "missing", "injured", "people_affected",
-                           "houses_destroyed", "houses_damaged") if p.get(k))
+    return sum(1 for k in LOSS_FIELDS if p.get(k))
+
+
+def _is_manual(p):
+    return "manual" in p.get("source", "").split("+")
 
 
 def spatial_dedupe(features, km=5.0, days=2):
@@ -162,13 +169,29 @@ def spatial_dedupe(features, km=5.0, days=2):
             kept.append(f)
             continue
         q = match["properties"]
-        # merge losing row into the kept one; tie on richness -> keep lower id
-        if (_richness(p), str(q["id"])) > (_richness(q), str(p["id"])):
-            for k in ("deaths", "missing", "injured", "people_affected",
-                      "houses_destroyed", "houses_damaged", "severity_score",
-                      "severity_class"):
+        # A hand-curated row (data/raw/manual_events.csv) is sourced from a
+        # named authority for exactly this reason — an automated feed logging
+        # the same disaster later must never silently overwrite it. Richness
+        # alone would let that happen (a duplicate with more populated fields
+        # wins), so a manual row always becomes the surviving record: its id,
+        # title, geometry and figures all stay, and it only absorbs a loss
+        # field it did not itself have. Between two non-manual rows the
+        # original richness heuristic still applies.
+        src_union = sorted(set(q["source"].split("+")) | set(p["source"].split("+")))
+        if _is_manual(q) and not _is_manual(p):
+            for k in LOSS_FIELDS:
+                if not q.get(k):
+                    q[k] = p.get(k, q.get(k))
+        elif _is_manual(p) and not _is_manual(q):
+            gap = {k: q[k] for k in LOSS_FIELDS if q.get(k) and not p.get(k)}
+            match["geometry"] = f["geometry"]      # the curated point, not the auto one
+            q.clear()
+            q.update(p)
+            q.update(gap)
+        elif (_richness(p), str(q["id"])) > (_richness(q), str(p["id"])):
+            for k in LOSS_FIELDS:
                 q[k] = p.get(k, q.get(k))
-        q["source"] = "+".join(sorted(set(q["source"].split("+")) | set(p["source"].split("+"))))
+        q["source"] = "+".join(src_union)
     print(f"  spatial_dedupe: {len(feats)} -> {len(kept)}")
     return kept
 

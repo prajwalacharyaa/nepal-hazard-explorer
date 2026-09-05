@@ -1,6 +1,13 @@
-name: Daily refresh (rainfall + alerts)
+name: Daily refresh (BIPAD + rainfall + alerts)
 
-# Two things that go stale on their own, refreshed together each morning:
+# Everything that can go stale on its own, refreshed together every morning:
+#
+#   events.geojson +   re-fetches BIPAD (Nepal's own incident feed — landslide,
+#   the rest of         flood, avalanche, with coordinates and losses) and
+#   data/processed/     rebuilds the whole derived dataset from it: district
+#                       and municipality rollups, the calendar, the seasonal
+#                       outlook, GLOF context. A new landslide or flood BIPAD
+#                       logs today shows up on the site today, not next Monday.
 #
 #   rain.json          last few days of NASA GPM IMERG Late daily precipitation,
 #                      summarised per district. Needs repo secret
@@ -9,13 +16,28 @@ name: Daily refresh (rainfall + alerts)
 #                      "NASA GESDISC DATA ARCHIVE" EULA on that same page.
 #
 #   active_alerts.json areas still under a decaying post-event alert. This one
-#                      changes purely with the passage of time — an alert steps
+#                      moves purely with the passage of time — an alert steps
 #                      high -> elevated -> watch and then expires — so it needs
 #                      a daily run even when no new event has been recorded.
-#                      No network, no secret.
 #
-# The alert step runs even if the rainfall step fails, because a missing
-# Earthdata token must not also freeze the alerts.
+# What this does NOT cover, on purpose:
+#   - downstream corridors (corridors.py) for a newly significant event. That
+#     needs the 79 MB HydroRIVERS network and re-traces are not incremental,
+#     so it stays a manual/occasional step, not a daily one. A brand-new severe
+#     event will show on the map and in alerts today, just without an impact
+#     corridor until someone runs corridors.py.
+#   - the exact toll for a major named disaster (e.g. a mass-casualty flood).
+#     BIPAD's own record updates on its own schedule and is not always the
+#     fastest-moving source for a fast-changing toll; data/raw/manual_events.csv
+#     is hand-updated from NDRRMA/Nepal Police reporting for those, same as
+#     before. aggregate.py's dedup guarantees a curated (source=manual) row
+#     always wins its identity, figures and location over an automated
+#     duplicate logged later — it only absorbs a field the curated row left
+#     blank. Verified against both merge orderings before this workflow
+#     started running BIPAD daily instead of weekly.
+#
+# The rainfall step is allowed to fail (continue-on-error) so a missing or
+# expired Earthdata token can never block the rest of the refresh.
 
 on:
   schedule:
@@ -40,34 +62,68 @@ jobs:
           python-version: "3.12"
 
       - name: Install deps
-        run: pip install requests numpy geopandas shapely xarray h5netcdf h5py
+        run: pip install -r pipeline/requirements.txt
+
+      # DesInventar (182 MB) + HDX boundaries barely ever change — cache keeps
+      # the daily run from re-downloading them every morning.
+      - name: Cache slow static sources
+        id: rawcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/raw/desinventar_npl.xml
+            data/raw/desinventar_shapes
+            data/raw/npl_adm
+            data/raw/npl_adm2_districts.geojson
+            data/raw/npl_adm3_palikas.geojson
+            data/raw/npl_pop_adm2.csv
+          key: raw-static-${{ github.run_id }}
+          restore-keys: raw-static-
+
+      - name: Fetch DesInventar + boundaries (skipped if cached)
+        if: steps.rawcache.outputs.cache-hit != 'true'
+        working-directory: pipeline
+        run: |
+          python fetch_desinventar.py
+          python fetch_boundaries.py
+
+      - name: Fetch BIPAD
+        working-directory: pipeline
+        run: python fetch_bipad.py
 
       - name: Fetch rainfall
         id: rain
         continue-on-error: true
+        working-directory: pipeline
         env:
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
-        run: python pipeline/fetch_rain.py
+        run: python fetch_rain.py
 
-      - name: Refresh active alerts
-        if: always()
-        run: python pipeline/active_alerts.py
+      - name: Rebuild the dataset
+        working-directory: pipeline
+        run: |
+          python clean_merge.py
+          python aggregate.py
+          python outlook.py
+          python glof.py
+          # events.geojson has just been rebuilt, so recompute the alerts it
+          # implies now rather than waiting for the next run
+          python active_alerts.py
 
       - name: Commit if changed
         if: always()
         run: |
-          FILES="data/processed/rain.json data/processed/active_alerts.json"
-          if git diff --quiet -- $FILES; then
+          if git diff --quiet -- data/processed; then
             echo "no change"; exit 0
           fi
           git config user.name  "data-bot"
           git config user.email "data-bot@users.noreply.github.com"
-          git add $FILES
+          git add data/processed
           git commit -m "daily: $(date -u +%F)"
           git push
 
       - name: Report rainfall failure
         if: steps.rain.outcome == 'failure'
         run: |
-          echo "::warning::fetch_rain.py failed — alerts were still refreshed."
+          echo "::warning::fetch_rain.py failed — the rest of the refresh still ran."
           echo "Check the EARTHDATA_TOKEN secret and that the GES DISC EULA is accepted."
