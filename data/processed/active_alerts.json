@@ -1,6 +1,6 @@
 {
- "generated": "2026-09-26",
- "reference_date": "2026-09-26",
+ "generated": "2026-09-27",
+ "reference_date": "2026-09-27",
  "note": "Areas recently hit hard enough to stay at raised risk while they recover: saturated ground, blocked or re-routed channels, debris still perched upslope, damaged infrastructure. Derived from the recorded event feed and self-expiring — the frontend re-checks every alert against the viewer's own clock, so a stale build simply shows nothing rather than something wrong.",
  "min_severity": 25.0,
  "stages": [
@@ -35,11 +35,28 @@
   }
  },
  "counts": {
-  "high": 0,
+  "high": 1,
   "elevated": 0,
-  "watch": 2
+  "watch": 1
  },
  "alerts": [
+  {
+   "district": "Baglung",
+   "palikas": [
+    "Dhorpatan"
+   ],
+   "level": "high",
+   "label": "Area in high alert",
+   "hazard": "landslide",
+   "event_id": "bipad-94833",
+   "event_date": "2026-09-25",
+   "deaths": 4,
+   "missing": 1,
+   "days_since": 2,
+   "expires": "2026-11-09",
+   "stage_ends": "2026-10-02",
+   "source": "derived from the recorded event feed"
+  },
   {
    "district": "Rasuwa",
    "palikas": [
@@ -52,26 +69,9 @@
    "event_date": "2026-08-26",
    "deaths": 1252,
    "missing": 4216,
-   "days_since": 31,
+   "days_since": 32,
    "expires": "2026-10-10",
    "stage_ends": "2026-10-10",
-   "source": "derived from the recorded event feed"
-  },
-  {
-   "district": "Rolpa",
-   "palikas": [
-    "Rolpa"
-   ],
-   "level": "watch",
-   "label": "Recently affected area",
-   "hazard": "landslide",
-   "event_id": "bipad-93020",
-   "event_date": "2026-08-12",
-   "deaths": 5,
-   "missing": 1,
-   "days_since": 45,
-   "expires": "2026-09-26",
-   "stage_ends": "2026-09-26",
    "source": "derived from the recorded event feed"
   }
  ]
