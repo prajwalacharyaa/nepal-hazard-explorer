@@ -54,6 +54,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -87,7 +88,11 @@ jobs:
           python fetch_desinventar.py
           python fetch_boundaries.py
 
+      # allowed to fail so a BIPAD outage still lets active_alerts.json decay
+      # on schedule; the run is marked failed at the end
       - name: Fetch BIPAD
+        id: bipad
+        continue-on-error: true
         working-directory: pipeline
         run: python fetch_bipad.py
 
@@ -100,6 +105,7 @@ jobs:
         run: python fetch_rain.py
 
       - name: Rebuild the dataset
+        if: steps.bipad.outcome == 'success'
         working-directory: pipeline
         run: |
           python clean_merge.py
@@ -109,6 +115,13 @@ jobs:
           # events.geojson has just been rebuilt, so recompute the alerts it
           # implies now rather than waiting for the next run
           python active_alerts.py
+
+      # data/raw is not in git, so without a fresh BIPAD pull only the
+      # time-driven alerts can be recomputed, from the committed events.geojson
+      - name: Refresh alerts only (BIPAD unreachable)
+        if: steps.bipad.outcome == 'failure'
+        working-directory: pipeline
+        run: python active_alerts.py
 
       - name: Commit if changed
         if: always()
@@ -127,3 +140,9 @@ jobs:
         run: |
           echo "::warning::fetch_rain.py failed — the rest of the refresh still ran."
           echo "Check the EARTHDATA_TOKEN secret and that the GES DISC EULA is accepted."
+
+      - name: Report BIPAD failure
+        if: steps.bipad.outcome == 'failure'
+        run: |
+          echo "::error::fetch_bipad.py failed (BIPAD unreachable?) — only active_alerts.json was refreshed."
+          exit 1

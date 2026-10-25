@@ -38,9 +38,9 @@ session.mount("https://", HTTPAdapter(max_retries=Retry(
 def fetch_page(offset: int) -> list[dict]:
     params = {"limit": LIMIT, "offset": offset, "expand": EXPAND, "ordering": ORDERING}
     # extra outer loop for DNS / connection resets that Retry() does not cover
-    for attempt in range(8):
+    for attempt in range(3):
         try:
-            r = session.get(BASE, params=params, timeout=90)
+            r = session.get(BASE, params=params, timeout=(15, 90))  # (connect, read): an outage fails in minutes, not hours
             r.raise_for_status()
             return r.json().get("results", [])
         except (requests.RequestException, ValueError) as e:
