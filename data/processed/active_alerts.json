@@ -1,6 +1,6 @@
 {
- "generated": "2026-10-30",
- "reference_date": "2026-10-30",
+ "generated": "2026-11-03",
+ "reference_date": "2026-11-03",
  "note": "Areas recently hit hard enough to stay at raised risk while they recover: saturated ground, blocked or re-routed channels, debris still perched upslope, damaged infrastructure. Derived from the recorded event feed and self-expiring — the frontend re-checks every alert against the viewer's own clock, so a stale build simply shows nothing rather than something wrong.",
  "min_severity": 25.0,
  "stages": [
@@ -36,8 +36,8 @@
  },
  "counts": {
   "high": 0,
-  "elevated": 1,
-  "watch": 1
+  "elevated": 0,
+  "watch": 2
  },
  "alerts": [
   {
@@ -45,16 +45,16 @@
    "palikas": [
     "Dharche"
    ],
-   "level": "elevated",
-   "label": "Area under an elevated alert",
+   "level": "watch",
+   "label": "Recently affected area",
    "hazard": "flood",
    "event_id": "bipad-95702",
    "event_date": "2026-10-11",
    "deaths": 0,
    "missing": 6,
-   "days_since": 19,
+   "days_since": 23,
    "expires": "2026-11-25",
-   "stage_ends": "2026-11-01",
+   "stage_ends": "2026-11-25",
    "source": "derived from the recorded event feed"
   },
   {
@@ -69,7 +69,7 @@
    "event_date": "2026-09-27",
    "deaths": 16,
    "missing": 0,
-   "days_since": 33,
+   "days_since": 37,
    "expires": "2026-11-11",
    "stage_ends": "2026-11-11",
    "source": "derived from the recorded event feed"
