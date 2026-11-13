@@ -1,6 +1,6 @@
 {
- "generated": "2026-11-11",
- "reference_date": "2026-11-11",
+ "generated": "2026-11-13",
+ "reference_date": "2026-11-13",
  "note": "Areas recently hit hard enough to stay at raised risk while they recover: saturated ground, blocked or re-routed channels, debris still perched upslope, damaged infrastructure. Derived from the recorded event feed and self-expiring — the frontend re-checks every alert against the viewer's own clock, so a stale build simply shows nothing rather than something wrong.",
  "min_severity": 25.0,
  "stages": [
@@ -37,7 +37,7 @@
  "counts": {
   "high": 0,
   "elevated": 0,
-  "watch": 2
+  "watch": 1
  },
  "alerts": [
   {
@@ -52,26 +52,9 @@
    "event_date": "2026-10-11",
    "deaths": 0,
    "missing": 6,
-   "days_since": 31,
+   "days_since": 33,
    "expires": "2026-11-25",
    "stage_ends": "2026-11-25",
-   "source": "derived from the recorded event feed"
-  },
-  {
-   "district": "Manang",
-   "palikas": [
-    "Narpa Bhumi"
-   ],
-   "level": "watch",
-   "label": "Recently affected area",
-   "hazard": "avalanche",
-   "event_id": "bipad-95337",
-   "event_date": "2026-09-27",
-   "deaths": 16,
-   "missing": 0,
-   "days_since": 45,
-   "expires": "2026-11-11",
-   "stage_ends": "2026-11-11",
    "source": "derived from the recorded event feed"
   }
  ]
