@@ -1,6 +1,6 @@
 {
- "generated": "2026-11-27",
- "reference_date": "2026-11-27",
+ "generated": "2026-11-28",
+ "reference_date": "2026-11-28",
  "note": "Areas recently hit hard enough to stay at raised risk while they recover: saturated ground, blocked or re-routed channels, debris still perched upslope, damaged infrastructure. Derived from the recorded event feed and self-expiring — the frontend re-checks every alert against the viewer's own clock, so a stale build simply shows nothing rather than something wrong.",
  "min_severity": 25.0,
  "stages": [
